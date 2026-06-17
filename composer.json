@@ -1,0 +1,31 @@
+{
+    "name": "rh/hardening",
+    "description": "Security-Hardening für WordPress. Teil der rh-blueprint Kollektion.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Robin Herbeck",
+            "homepage": "https://robinherbeck.de"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "rh/blueprint-core": "^2.0",
+        "yahnis-elsts/plugin-update-checker": "^5.5"
+    },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/herbeckrobin/rh-blueprint-core"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "RhHardening\\": "inc/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
