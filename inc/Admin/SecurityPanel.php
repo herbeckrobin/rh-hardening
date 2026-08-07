@@ -20,7 +20,7 @@ use RhHardening\Shield\Shield;
  * Zustand und Chronik unter dem Tab "Sicherheit".
  *
  * Hängt an `tab_content_after`, nicht an der GroupInterface-Automatik: das hier
- * ist keine Formularmaske, sondern Ausgabe. Baut ausschliesslich auf den
+ * ist keine Formularmaske, sondern Ausgabe. Baut ausschließlich auf den
  * Komponenten des Core auf, damit es aussieht wie der Rest der Suite.
  */
 final class SecurityPanel
@@ -33,9 +33,24 @@ final class SecurityPanel
     public function boot(): void
     {
         add_action('rh-blueprint/settings/tab_content_after', [$this, 'render'], 10, 1);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue']);
         add_action('admin_post_' . self::ACTION_SCAN, [$this, 'handleScan']);
         add_action('admin_post_' . self::ACTION_DEEP_SCAN, [$this, 'handleDeepScan']);
         add_action('admin_post_' . self::ACTION_BASELINE, [$this, 'handleBaseline']);
+    }
+
+    public function enqueue(string $hook): void
+    {
+        if (! str_contains($hook, SettingsPage::MENU_SLUG)) {
+            return;
+        }
+
+        wp_enqueue_style(
+            'rh-hardening-admin',
+            plugins_url('assets/admin.css', RHHARD_PLUGIN_FILE),
+            ['rh-blueprint-settings'],
+            RHHARD_VERSION
+        );
     }
 
     public function render(string $tabId): void
@@ -44,11 +59,47 @@ final class SecurityPanel
             return;
         }
 
+        $sub = Sections::current();
+
+        $this->renderSubtabs($sub);
         $this->renderNotice();
-        $this->renderState();
-        $this->renderRadar();
-        $this->renderIntegrity();
-        $this->renderChronicle();
+
+        switch ($sub) {
+            case Sections::TAB_PROTECT:
+            case Sections::TAB_WATCH:
+                (new SecurityPage())->renderSettings($sub);
+                break;
+
+            case Sections::TAB_LOG:
+                $this->renderChronicle(50);
+                break;
+
+            default:
+                $this->renderState();
+                $this->renderRadar();
+                $this->renderIntegrity();
+                $this->renderChronicle(8);
+        }
+    }
+
+    /**
+     * Echte Links statt Umschalten per JavaScript: der Zustand ist damit
+     * verlinkbar, und die Übergänge des Browsers greifen von allein.
+     */
+    private function renderSubtabs(string $active): void
+    {
+        echo '<div class="rhbp-subtabs rhhard-subtabs">';
+
+        foreach (Sections::tabs() as $key => $label) {
+            printf(
+                '<a class="rhbp-subtab%s" href="%s">%s</a>',
+                $key === $active ? ' is-active' : '',
+                esc_url(SecurityPage::url($key)),
+                esc_html($label)
+            );
+        }
+
+        echo '</div>';
     }
 
     /**
@@ -62,7 +113,7 @@ final class SecurityPanel
         echo '<div class="rhbp-card__head"><h3 class="rhbp-card__title">' . esc_html__('Bekannte Lücken', 'rh-hardening') . '</h3></div>';
 
         if ($result === null) {
-            echo '<p class="rhbp-empty">' . esc_html__('Noch kein Abgleich. Sobald ein Verteiler eingetragen ist, prüft die Website täglich, ob für eines ihrer Plugins, Themes oder den Kern eine Lücke bekannt ist.', 'rh-hardening') . '</p>';
+            echo '<p class="rhbp-empty">' . esc_html__('Noch kein Abgleich gelaufen. Er prüft täglich, ob für eines der installierten Plugins, Themes oder den WordPress-Kern eine Lücke bekannt ist.', 'rh-hardening') . '</p>';
             echo '</div>';
 
             return;
@@ -420,9 +471,9 @@ final class SecurityPanel
         exit;
     }
 
-    private function renderChronicle(): void
+    private function renderChronicle(int $limit): void
     {
-        $rows = EventLog::query(['limit' => 50]);
+        $rows = EventLog::query(['limit' => $limit]);
 
         echo '<div class="rhbp-card">';
         echo '<div class="rhbp-card__head"><h3 class="rhbp-card__title">' . esc_html__('Chronik', 'rh-hardening') . '</h3></div>';
@@ -477,8 +528,8 @@ final class SecurityPanel
                 'message' => sprintf(
                     /* translators: %d: Anzahl der Funde */
                     _n(
-                        '%d Datei im Wurzelverzeichnis ist von aussen abrufbar. Einzelheiten stehen in der Chronik.',
-                        '%d Dateien im Wurzelverzeichnis sind von aussen abrufbar. Einzelheiten stehen in der Chronik.',
+                        '%d Datei im Wurzelverzeichnis ist von außen abrufbar. Einzelheiten stehen in der Chronik.',
+                        '%d Dateien im Wurzelverzeichnis sind von außen abrufbar. Einzelheiten stehen in der Chronik.',
                         $reachable,
                         'rh-hardening'
                     ),

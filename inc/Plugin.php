@@ -7,6 +7,7 @@ namespace RhHardening;
 use RhBlueprint\Core\Core;
 use RhBlueprint\Core\Settings\SettingsPage;
 use RhHardening\Admin\HardeningGroup;
+use RhHardening\Admin\SecurityPage;
 use RhHardening\Admin\SecurityPanel;
 use RhHardening\Integrity\ScanRunner;
 use RhHardening\Notify\Mailer;
@@ -63,8 +64,9 @@ final class Plugin
 
     public static function onCoreBooted(Core $core): void
     {
+        // Nur den Tab anmelden, nicht die Gruppe: die Felder rendert
+        // SecurityPage selbst, sonst käme die Formularliste des Core dazu.
         $core->settings()->registerTab('hardening', __('Sicherheit', 'rh-hardening'), 40);
-        $core->settings()->registerGroup(new HardeningGroup());
 
         // Prävention
         (new Hardening())->boot();
@@ -78,6 +80,7 @@ final class Plugin
         (new Mailer())->boot();
 
         if (is_admin()) {
+            (new SecurityPage())->boot();
             (new SecurityPanel())->boot();
         }
 

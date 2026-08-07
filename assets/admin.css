@@ -1,0 +1,87 @@
+/*
+ * Nur das, was der Core noch nicht hat.
+ *
+ * Die Zeile mit Name, Erklärung und Schalter bauen tracking, monitor und
+ * editor jeweils selbst; im Core steht bisher nur der Schalter. Sobald die
+ * Zeile dort landet, kann das hier weg.
+ *
+ * Alle Farben und Abstände kommen aus den Token des Core, damit die Seite
+ * aussieht wie der Rest der Suite.
+ */
+
+.rhbp-settings .rhhard-subtabs {
+    margin-top: -4px;
+}
+
+.rhbp-settings .rhhard-subtabs .rhbp-subtab {
+    text-decoration: none;
+}
+
+.rhbp-settings .rhhard-group {
+    margin-bottom: 28px;
+}
+
+.rhbp-settings .rhhard-group__title {
+    margin: 0 0 2px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--rhbp-ink);
+}
+
+.rhbp-settings .rhhard-group__hint {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: var(--rhbp-faint);
+}
+
+/* Eine Einstellung: links Name und ein Satz, rechts Zustand und Schalter. */
+.rhbp-settings .rhhard-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+    padding: 12px 16px;
+}
+
+.rhbp-settings .rhhard-row__text {
+    flex: 1;
+    min-width: 0;
+}
+
+.rhbp-settings .rhhard-row__name {
+    display: block;
+    font-size: 13px;
+    color: var(--rhbp-ink);
+}
+
+.rhbp-settings .rhhard-row__desc {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--rhbp-muted);
+}
+
+.rhbp-settings .rhhard-row__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+}
+
+/* Der Schalter steckt in einem eigenen Formular, das darf keine Höhe erzeugen. */
+.rhbp-settings .rhhard-row__actions .rhbp-toggle-form {
+    display: flex;
+    margin: 0;
+}
+
+@media (max-width: 600px) {
+    .rhbp-settings .rhhard-row {
+        flex-wrap: wrap;
+    }
+
+    .rhbp-settings .rhhard-row__actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
