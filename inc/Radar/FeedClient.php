@@ -30,6 +30,13 @@ final class FeedClient
      */
     private const DEFAULT_ENDPOINT = 'https://robinherbeck.com/api/security-feed';
 
+    /**
+     * Erkennungszeichen der Suite. Ausdrücklich KEIN Geheimnis, es steht in
+     * jedem Release-ZIP. Es hält Bots vom Verteiler fern und macht echte
+     * Anfragen zuordenbar, mehr soll es nicht leisten.
+     */
+    private const MODULE_TOKEN = 'rhbp-suite-feed-2026';
+
     private const INDEX_TRANSIENT = 'rhhard_feed_index';
     private const INDEX_TTL = 12 * HOUR_IN_SECONDS;
 
@@ -57,7 +64,7 @@ final class FeedClient
             return null;
         }
 
-        $response = wp_remote_get($url, ['timeout' => 45]);
+        $response = wp_remote_get($url, $this->args());
 
         if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
             return null;
@@ -93,7 +100,7 @@ final class FeedClient
         foreach (array_chunk(array_values($keys), self::CHUNK) as $chunk) {
             $response = wp_remote_get(
                 add_query_arg('slugs', implode(',', $chunk), $url),
-                ['timeout' => 45]
+                $this->args()
             );
 
             if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
@@ -108,6 +115,26 @@ final class FeedClient
         }
 
         return $found;
+    }
+
+    /**
+     * Die Website nennt dem Verteiler ihre Domain. Damit lässt sich dort ein
+     * Limit je Website statt je IP führen und im Ernstfall eine einzelne
+     * sperren, ohne dass hier etwas eingestellt werden muss.
+     *
+     * @return array<string, mixed>
+     */
+    private function args(): array
+    {
+        $host = wp_parse_url(home_url('/'), PHP_URL_HOST);
+
+        return [
+            'timeout' => 45,
+            'headers' => [
+                'X-RH-Token' => self::MODULE_TOKEN,
+                'X-RH-Site' => is_string($host) ? $host : '',
+            ],
+        ];
     }
 
     public function endpoint(): string
