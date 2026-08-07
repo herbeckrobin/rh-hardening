@@ -19,7 +19,7 @@ final class UploadScan implements StageScanner
     /** @var array<int, string> */
     private const EXECUTABLE = ['php', 'phtml', 'php3', 'php4', 'php5', 'php7', 'php8', 'phar', 'pht', 'phps'];
 
-    /** Notbremse bei sehr grossen Mediatheken. */
+    /** Notbremse bei sehr großen Mediatheken. */
     private const MAX_FILES = 200000;
 
     public function run(ScanJob $job, float $deadline): bool

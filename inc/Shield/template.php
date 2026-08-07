@@ -5,7 +5,7 @@
  *
  * Diese Datei wird vom Plugin "RH Hardening" erzeugt und bei jedem Update neu
  * ausgelegt. Änderungen von Hand gehen dabei verloren, und das Plugin meldet
- * sie ausserdem als Verdachtsfall.
+ * sie außerdem als Verdachtsfall.
  *
  * Sie liegt in mu-plugins, weil sie laufen muss, bevor WordPress die REST-
  * Schnittstelle überhaupt aufbaut. Genau dort lag der Fehler bei wp2shell: die
@@ -70,8 +70,8 @@ define('RHHARD_SHIELD', '__RHHARD_SHIELD_VERSION__');
             }
         }
     } catch (\Throwable $e) {
-        // Nie die Seite mitreissen. Ein stiller Ausfall des Walls ist besser
-        // als eine weisse Seite beim Kunden.
+        // Nie die Seite mitreißen. Ein stiller Ausfall des Walls ist besser
+        // als eine weiße Seite beim Kunden.
         return;
     }
 })();

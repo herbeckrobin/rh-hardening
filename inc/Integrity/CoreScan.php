@@ -11,7 +11,7 @@ namespace RhHardening\Integrity;
  * kann, wie eine Kern-Datei auszusehen hat. Wer eine Hintertür in eine
  * Kern-Datei schreibt, fällt hier auf, egal wie gut sie versteckt ist.
  *
- * wp-content bleibt bewusst aussen vor: Themes und Plugins werden dort legitim
+ * wp-content bleibt bewusst außen vor: Themes und Plugins werden dort legitim
  * geändert und gelöscht. WP-CLI macht bei `core verify-checksums` dieselbe
  * Ausnahme.
  */

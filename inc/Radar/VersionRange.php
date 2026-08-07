@@ -94,7 +94,7 @@ final class VersionRange
 
     /**
      * WordPress-Versionen tragen manchmal Beiwerk, das version_compare
-     * durcheinanderbringt. Alles ausser Ziffern, Punkten und den üblichen
+     * durcheinanderbringt. Alles außer Ziffern, Punkten und den üblichen
      * Trennern fliegt raus.
      */
     private static function normalize(string $version): string

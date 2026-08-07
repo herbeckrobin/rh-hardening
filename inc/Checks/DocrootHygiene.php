@@ -16,7 +16,7 @@ use RhHardening\Log\EventLog;
  * offenes .git-Verzeichnis vom Deploy. Jede einzelne davon reicht, um eine
  * ansonsten gut gehärtete Website komplett zu übernehmen.
  *
- * Der Fund allein sagt noch nichts. Entscheidend ist, ob die Datei von aussen
+ * Der Fund allein sagt noch nichts. Entscheidend ist, ob die Datei von außen
  * abrufbar ist, deshalb wird jeder Treffer zusätzlich per HTTP geprüft.
  * Gelöscht wird nichts, das entscheidet ein Mensch.
  */
@@ -50,7 +50,7 @@ final class DocrootHygiene
     ];
 
     /**
-     * Verzeichnisse, deren blosse Erreichbarkeit ein Fund ist.
+     * Verzeichnisse, deren bloße Erreichbarkeit ein Fund ist.
      *
      * @var array<int, string>
      */
@@ -164,7 +164,7 @@ final class DocrootHygiene
                 Event::TYPE_DOCROOT_FINDING,
                 sprintf(
                     /* translators: %s: Dateiname */
-                    __('Datei im Wurzelverzeichnis von aussen abrufbar: %s', 'rh-hardening'),
+                    __('Datei im Wurzelverzeichnis von außen abrufbar: %s', 'rh-hardening'),
                     $finding['pfad']
                 ),
                 ['pfad' => $finding['pfad'], 'url' => $finding['url']]

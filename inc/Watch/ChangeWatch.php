@@ -217,7 +217,7 @@ final class ChangeWatch
     }
 
     /**
-     * Gibt es ausser diesem Benutzer noch einen Administrator?
+     * Gibt es außer diesem Benutzer noch einen Administrator?
      */
     private function otherAdministratorsExist(int $userId): bool
     {

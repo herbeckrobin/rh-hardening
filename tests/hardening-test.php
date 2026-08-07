@@ -165,16 +165,16 @@ check('Vorlage trägt einen Platzhalter für die Version', str_contains($templat
 echo "\nVersionsvergleich\n";
 use RhHardening\Radar\VersionRange;
 
-// Der Bereich aus einem echten Datensatz: alles bis einschliesslich 6.0.5
+// Der Bereich aus einem echten Datensatz: alles bis einschließlich 6.0.5
 $bis605 = [['from_version' => '*', 'from_inclusive' => true, 'to_version' => '6.0.5', 'to_inclusive' => true]];
 check('betroffene Fassung wird erkannt', VersionRange::matchesAny('6.0', $bis605), true);
 check('die Obergrenze selbst ist betroffen', VersionRange::matchesAny('6.0.5', $bis605), true);
 check('die gefixte Fassung ist es nicht', VersionRange::matchesAny('6.0.6', $bis605), false);
 check('eine viel neuere erst recht nicht', VersionRange::matchesAny('6.1.6', $bis605), false);
 
-// Grenze ausschliessend
+// Grenze ausschließend
 $unter2 = [['from_version' => '1.0', 'from_inclusive' => true, 'to_version' => '2.0', 'to_inclusive' => false]];
-check('ausschliessende Obergrenze', VersionRange::matchesAny('2.0', $unter2), false);
+check('ausschließende Obergrenze', VersionRange::matchesAny('2.0', $unter2), false);
 check('knapp darunter trifft', VersionRange::matchesAny('1.9.9', $unter2), true);
 check('unterhalb der Untergrenze trifft nicht', VersionRange::matchesAny('0.9', $unter2), false);
 

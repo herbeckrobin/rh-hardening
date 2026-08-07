@@ -10,14 +10,14 @@ use WP_Error;
  * Ruft die eigene Website auf, um einen Zustand zu messen statt ihn anzunehmen.
  *
  * Zwei Prüfungen brauchen das: die Sonde im Upload-Verzeichnis und die Frage,
- * ob ein Fund im Wurzelverzeichnis von aussen abrufbar ist. Deshalb steht es
+ * ob ein Fund im Wurzelverzeichnis von außen abrufbar ist. Deshalb steht es
  * hier einmal und nicht zweimal.
  *
  * Zum Zertifikat: der erste Versuch prüft es. Schlägt er daran fehl, folgt ein
  * zweiter ohne Prüfung, und das Ergebnis wird als solches gekennzeichnet. Der
  * Grund ist praktisch: hinter einem Proxy, in einer lokalen Umgebung oder bei
  * einer Zwischenstellung mit eigenem Zertifikat wäre die Prüfung sonst dauerhaft
- * ergebnislos, und "weiss ich nicht" ist die schlechteste aller Antworten auf
+ * ergebnislos, und "weiß ich nicht" ist die schlechteste aller Antworten auf
  * die Frage, ob im Upload-Verzeichnis PHP läuft. Das Ziel ist die eigene
  * Domain, ein Angreifer in der Mitte gewinnt hier nichts.
  */
