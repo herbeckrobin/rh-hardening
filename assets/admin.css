@@ -34,13 +34,21 @@
     color: var(--rhbp-faint);
 }
 
-/* Eine Einstellung: links Name und ein Satz, rechts Zustand und Schalter. */
+/* Der Abstand zwischen den Zeilen kommt vom Container, wie bei den Anbieter-
+   Zeilen in rh-tracking. */
+.rhbp-settings .rhhard-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Eine Einstellung: links Name und ein Satz, rechts Zustand und Schalter.
+   Innenabstand und Abstände wie im Vorbild rh-tracking. */
 .rhbp-settings .rhhard-row {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 8px;
-    padding: 12px 16px;
+    gap: 14px;
+    padding: 14px 18px;
 }
 
 .rhbp-settings .rhhard-row__text {
@@ -62,11 +70,25 @@
     color: var(--rhbp-muted);
 }
 
+/* Feste Spalten, damit Zusatz, Schalter und Zahnrad über alle Zeilen in einer
+   Flucht stehen, auch wenn eine Zeile keinen Zusatz oder kein Zahnrad hat. */
 .rhbp-settings .rhhard-row__actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 34px 32px;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex: none;
+}
+
+.rhbp-settings .rhhard-row__note {
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.rhbp-settings .rhhard-row__gear {
+    display: flex;
+    justify-content: flex-end;
 }
 
 /* Der Schalter steckt in einem eigenen Formular, das darf keine Höhe erzeugen. */
@@ -84,4 +106,21 @@
         width: 100%;
         justify-content: flex-end;
     }
+}
+
+/* Die Karten des Tabs stehen als Geschwister untereinander und bringen selbst
+   keinen Abstand mit. Der kommt hier, in derselben Grösse wie zwischen den
+   Zeilen im Schutz-Bereich. */
+.rhbp-settings .rhhard-subtabs ~ .rhbp-card {
+    margin-bottom: 16px;
+}
+
+.rhbp-settings .rhhard-subtabs ~ .rhbp-card:last-of-type {
+    margin-bottom: 0;
+}
+
+/* Innerhalb der Zustand-Karte: die Zahlen-Kacheln und die Liste darunter
+   brauchen Luft. */
+.rhbp-settings .rhhard-subtabs ~ .rhbp-card .rhbp-card-grid {
+    margin-bottom: 14px;
 }

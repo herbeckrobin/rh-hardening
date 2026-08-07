@@ -44,11 +44,13 @@ final class SecurityPage
                 esc_html($group['hinweis'])
             );
 
+            echo '<div class="rhhard-rows">';
+
             foreach ($group['felder'] as $fieldId) {
                 $this->renderRow($fieldId);
             }
 
-            echo '</div>';
+            echo '</div></div>';
         }
 
         foreach (Sections::groupsFor($tab) as $group) {
@@ -80,8 +82,12 @@ final class SecurityPage
         echo '</div>';
 
         echo '<div class="rhhard-row__actions">';
-        echo $this->statusPill($fieldId, $on, $value);
+
+        // Drei feste Spalten, damit die Kanten über alle Zeilen fluchten:
+        // Zusatz, Schalter, Zahnrad. Wo nichts hingehört, bleibt der Platz leer.
+        printf('<span class="rhhard-row__note">%s</span>', $this->note($fieldId, $on, $value));
         echo $this->toggleForm($fieldId, $on, $isSelect);
+        echo '<span class="rhhard-row__gear">';
 
         if (isset(Sections::extras()[$fieldId])) {
             printf(
@@ -93,6 +99,7 @@ final class SecurityPage
             );
         }
 
+        echo '</span>';
         echo '</div>';
         echo '</div>';
     }
@@ -119,13 +126,18 @@ final class SecurityPage
         return (string) ob_get_clean();
     }
 
-    private function statusPill(string $fieldId, bool $on, mixed $value): string
+    /**
+     * Ein kurzer Zusatz rechts, aber nur wo er etwas sagt, das der Schalter
+     * nicht schon zeigt. Ein "an" neben einem eingeschalteten Schalter ist
+     * doppelt und macht die Zeile nur unruhig.
+     */
+    private function note(string $fieldId, bool $on, mixed $value): string
     {
         if (! $on) {
-            return '<span class="rhbp-pill">' . esc_html__('aus', 'rh-hardening') . '</span>';
+            return '';
         }
 
-        // Beim Auswahlfeld sagt die Pille, welche Stufe gilt.
+        // Beim Auswahlfeld ist die Stufe die eigentliche Information.
         if ($fieldId === HardeningGroup::FIELD_REST_MODE) {
             $label = (string) $value === 'strict'
                 ? __('streng', 'rh-hardening')
@@ -134,7 +146,7 @@ final class SecurityPage
             return '<span class="rhbp-pill rhbp-pill--ok"><span class="rhbp-pill__dot"></span>' . esc_html($label) . '</span>';
         }
 
-        return '<span class="rhbp-pill rhbp-pill--ok"><span class="rhbp-pill__dot"></span>' . esc_html__('an', 'rh-hardening') . '</span>';
+        return '';
     }
 
     /**
@@ -286,11 +298,17 @@ final class SecurityPage
     }
 
     /**
-     * In der Zeile steht nur der erste Satz. Der Rest ist für den Fall gedacht,
-     * dass jemand nachliest, und wartet hinter dem Zahnrad.
+     * In der Zeile steht ein knapper Satz, damit alle Zeilen gleich hoch sind.
+     * Fehlt einer, wird der erste Satz der langen Beschreibung genommen.
      */
     private function shortDescription(SettingField $field): string
     {
+        $short = Sections::shortTexts()[$field->id] ?? '';
+
+        if ($short !== '') {
+            return $short;
+        }
+
         $parts = preg_split('/(?<=\.)\s+/', $field->description, 2);
 
         return trim($parts[0] ?? $field->description);

@@ -99,6 +99,38 @@ final class Sections
     }
 
     /**
+     * Ein knapper Satz je Einstellung für die Zeile.
+     *
+     * Absichtlich getrennt von der ausführlichen Beschreibung des Feldes: in
+     * der Zeile zählt, dass alle gleich hoch sind und man in einem Blick durch
+     * die Liste kommt. Wer es genauer wissen will, findet die lange Fassung in
+     * der Anleitung und hinter dem Zahnrad.
+     *
+     * @return array<string, string>
+     */
+    public static function shortTexts(): array
+    {
+        return [
+            HardeningGroup::FIELD_SHIELD => __('Weist Angriffe ab, bevor WordPress überhaupt startet.', 'rh-hardening'),
+            HardeningGroup::FIELD_REST_MODE => __('Sperrt Gästen die bekannten Problem-Routen der Schnittstelle.', 'rh-hardening'),
+            HardeningGroup::FIELD_BLOCK_USER_ENUM => __('Verhindert, dass Anmeldenamen von außen auslesbar sind.', 'rh-hardening'),
+            HardeningGroup::FIELD_DISABLE_XMLRPC => __('Schaltet eine alte Schnittstelle ab, die kaum noch gebraucht wird.', 'rh-hardening'),
+            HardeningGroup::FIELD_UPLOADS_NO_PHP => __('Macht hochgeladene Schadcode-Dateien wirkungslos.', 'rh-hardening'),
+            HardeningGroup::FIELD_SECURITY_HEADERS => __('Setzt die üblichen Schutz-Header, falls der Server es nicht tut.', 'rh-hardening'),
+            HardeningGroup::FIELD_DISABLE_FEEDS => __('Liefert RSS- und Atom-Feeds als 404 aus.', 'rh-hardening'),
+            HardeningGroup::FIELD_REMOVE_CLUTTER => __('Nimmt Versionsangaben und Altlasten aus dem Seitenkopf.', 'rh-hardening'),
+            HardeningGroup::FIELD_DISABLE_APP_PASSWORDS => __('Schließt einen zweiten Anmeldeweg, der an Login-Sperren vorbeiläuft.', 'rh-hardening'),
+            HardeningGroup::FIELD_SESSION_HARDENING => __('Wirft bei jedem Passwortwechsel alle anderen Geräte hinaus.', 'rh-hardening'),
+            HardeningGroup::FIELD_DISALLOW_FILE_EDIT => __('Nimmt den Datei-Editor aus dem Backend.', 'rh-hardening'),
+            HardeningGroup::FIELD_DISALLOW_FILE_MODS => __('Sperrt jede Installation und jedes Update, auch automatische.', 'rh-hardening'),
+            HardeningGroup::FIELD_WATCH_CHANGES => __('Hält fest, wer Plugins, Themes und Konten verändert.', 'rh-hardening'),
+            HardeningGroup::FIELD_RADAR => __('Prüft täglich, ob für die installierte Software Lücken bekannt sind.', 'rh-hardening'),
+            HardeningGroup::FIELD_DEMOTE_ROGUE_ADMIN => __('Setzt einen neu aufgetauchten Administrator sofort zurück.', 'rh-hardening'),
+            HardeningGroup::FIELD_NOTIFY => __('Schickt Auffälligkeiten per Mail heraus.', 'rh-hardening'),
+        ];
+    }
+
+    /**
      * Felder, die hinter dem Zahnrad noch etwas einzustellen haben.
      *
      * @return array<string, array<int, string>>

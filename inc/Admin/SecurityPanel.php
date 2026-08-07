@@ -78,7 +78,6 @@ final class SecurityPanel
                 $this->renderState();
                 $this->renderRadar();
                 $this->renderIntegrity();
-                $this->renderChronicle(8);
         }
     }
 
@@ -244,7 +243,7 @@ final class SecurityPanel
             )),
             $duration > 0 ? esc_html(sprintf(
                 /* translators: %d: Dauer in Sekunden */
-                __(' Dauer: %d Sekunden.', 'rh-hardening'),
+                _n(' Dauer: %d Sekunde.', ' Dauer: %d Sekunden.', $duration, 'rh-hardening'),
                 $duration
             )) : ''
         );
@@ -352,7 +351,14 @@ final class SecurityPanel
             echo '<p class="rhbp-hint">' . esc_html((string) $uploads['message']) . '</p>';
         }
 
-        echo '<div class="rhbp-card__actions">' . $this->scanButton() . '</div>';
+        echo '<div class="rhbp-card__actions">';
+        echo $this->scanButton();
+        printf(
+            '<a class="rhbp-btn rhbp-btn--ghost" href="%s">%s</a>',
+            esc_url(SecurityPage::url(Sections::TAB_LOG)),
+            esc_html__('Chronik ansehen', 'rh-hardening')
+        );
+        echo '</div>';
         echo '</div>';
     }
 
