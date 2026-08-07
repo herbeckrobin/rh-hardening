@@ -17,7 +17,12 @@ namespace RhHardening\Integrity;
  */
 final class CoreScan implements StageScanner
 {
-    private const CACHE_KEY = 'rhhard_core_checksums';
+    /**
+     * Der Schlüssel trägt Fassung und Sprache. Ohne das vergleicht das Modul
+     * nach einem WordPress-Update stundenlang gegen die Prüfsummen der alten
+     * Fassung und meldet jede geänderte Kern-Datei als Manipulation.
+     */
+    private const CACHE_PREFIX = 'rhhard_core_sums_';
     private const CACHE_TTL = 12 * HOUR_IN_SECONDS;
 
     public function run(ScanJob $job, float $deadline): bool
@@ -71,7 +76,11 @@ final class CoreScan implements StageScanner
      */
     private function checksums(): ?array
     {
-        $cached = get_transient(self::CACHE_KEY);
+        $version = get_bloginfo('version');
+        $locale = get_locale();
+        $key = self::CACHE_PREFIX . md5($version . '|' . $locale);
+
+        $cached = get_transient($key);
 
         if (is_array($cached)) {
             return $cached;
@@ -79,8 +88,6 @@ final class CoreScan implements StageScanner
 
         require_once ABSPATH . 'wp-admin/includes/update.php';
 
-        $version = get_bloginfo('version');
-        $locale = get_locale();
         $checksums = get_core_checksums($version, $locale);
 
         // Manche Sprachfassungen liefern nichts, dann auf Englisch ausweichen.
@@ -92,7 +99,7 @@ final class CoreScan implements StageScanner
             return null;
         }
 
-        set_transient(self::CACHE_KEY, $checksums, self::CACHE_TTL);
+        set_transient($key, $checksums, self::CACHE_TTL);
 
         return $checksums;
     }
