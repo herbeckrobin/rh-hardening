@@ -15,6 +15,7 @@ use RhHardening\Prevention\Uploads;
 use RhHardening\Radar\Radar;
 use RhHardening\Shield\Rules;
 use RhHardening\Shield\Shield;
+use RhHardening\Support\Env;
 
 /**
  * Zustand und Chronik unter dem Tab "Sicherheit".
@@ -209,6 +210,7 @@ final class SecurityPanel
         }
 
         echo '<div class="rhbp-card__actions">';
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- actionButton() escapt Klasse, URL und Beschriftung.
         echo $this->actionButton(self::ACTION_DEEP_SCAN, __('Prüflauf starten', 'rh-hardening'), 'rhbp-btn');
 
         if (HiddenScan::hasBaseline()) {
@@ -351,7 +353,10 @@ final class SecurityPanel
             echo '<p class="rhbp-hint">' . esc_html((string) $uploads['message']) . '</p>';
         }
 
+        $this->renderEnvironment();
+
         echo '<div class="rhbp-card__actions">';
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- scanButton() escapt sein Markup vollständig.
         echo $this->scanButton();
         printf(
             '<a class="rhbp-btn rhbp-btn--ghost" href="%s">%s</a>',
@@ -385,6 +390,56 @@ final class SecurityPanel
             esc_attr($class),
             esc_html($label)
         );
+    }
+
+    /**
+     * Was auf diesem Server nicht geht.
+     *
+     * Ein Modul, das stillschweigend die Hälfte nicht tut, ist schlimmer als
+     * eines, das fehlt: man hält die Website für geschützt. Deshalb steht hier,
+     * was die Umgebung verhindert, statt es nur ins Protokoll zu schreiben.
+     */
+    private function renderEnvironment(): void
+    {
+        $hinweise = [];
+
+        if (Env::cronDisabled()) {
+            $hinweise[] = __('WP-Cron ist abgeschaltet. Prüflauf und Abgleich laufen dann nur, wenn ein echter Server-Cronjob wp-cron.php aufruft.', 'rh-hardening');
+        }
+
+        $missing = Env::missing();
+
+        if ($missing !== []) {
+            $hinweise[] = sprintf(
+                /* translators: %s: Liste von PHP-Funktionen */
+                __('Dieser Server sperrt PHP-Funktionen, die für einzelne Prüfungen gebraucht werden: %s. Die betroffenen Prüfungen fallen aus, alles andere läuft.', 'rh-hardening'),
+                implode(', ', $missing)
+            );
+        }
+
+        $limit = Env::memoryLimit();
+
+        if ($limit > 0 && $limit < 96 * MB_IN_BYTES) {
+            $hinweise[] = sprintf(
+                /* translators: %s: Wert von memory_limit */
+                __('Die Speichergrenze liegt bei %s. Der Abgleich gegen bekannte Lücken bricht dann eventuell ab und meldet das.', 'rh-hardening'),
+                (string) ini_get('memory_limit')
+            );
+        }
+
+        if ($hinweise === []) {
+            return;
+        }
+
+        echo '<div class="rhbp-callout rhbp-callout--warn"><strong>'
+            . esc_html__('Was diese Umgebung einschränkt', 'rh-hardening')
+            . '</strong><ul style="margin:6px 0 0;padding-left:18px">';
+
+        foreach ($hinweise as $hinweis) {
+            printf('<li>%s</li>', esc_html($hinweis));
+        }
+
+        echo '</ul></div>';
     }
 
     private function uploadsPill(?array $uploads): string

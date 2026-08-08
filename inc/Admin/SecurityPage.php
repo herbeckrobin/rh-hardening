@@ -86,6 +86,7 @@ final class SecurityPage
         // Drei feste Spalten, damit die Kanten über alle Zeilen fluchten:
         // Zusatz, Schalter, Zahnrad. Wo nichts hingehört, bleibt der Platz leer.
         printf('<span class="rhhard-row__note">%s</span>', $this->note($fieldId, $on, $value));
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- toggleForm() baut sein Markup aus escapten Teilen.
         echo $this->toggleForm($fieldId, $on, $isSelect);
         echo '<span class="rhhard-row__gear">';
 
