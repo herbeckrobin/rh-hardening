@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace RhHardening\Integrity;
 
+use RhHardening\Support\Env;
+use RhHardening\Support\Log;
+
 /**
  * Vergleicht die Dateien des WordPress-Kerns mit den amtlichen Prüfsummen.
  *
@@ -27,6 +30,12 @@ final class CoreScan implements StageScanner
 
     public function run(ScanJob $job, float $deadline): bool
     {
+        if (! Env::has('md5_file')) {
+            Log::note('Kern nicht prüfbar, md5_file ist gesperrt');
+
+            return true;
+        }
+
         $checksums = $this->checksums();
 
         if ($checksums === null) {

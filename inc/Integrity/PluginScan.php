@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace RhHardening\Integrity;
 
+use RhHardening\Support\Env;
+use RhHardening\Support\Log;
+
 /**
  * Vergleicht installierte Plugins mit den Prüfsummen von wordpress.org.
  *
@@ -28,6 +31,12 @@ final class PluginScan implements StageScanner
 
     public function run(ScanJob $job, float $deadline): bool
     {
+        if (! Env::has('hash_file') || ! Env::has('md5_file')) {
+            Log::note('Plugins nicht prüfbar, Hash-Funktionen sind gesperrt');
+
+            return true;
+        }
+
         $plugins = $this->pluginList();
         $total = count($plugins);
 

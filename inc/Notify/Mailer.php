@@ -7,6 +7,7 @@ namespace RhHardening\Notify;
 use RhHardening\Admin\HardeningGroup;
 use RhHardening\Log\Event;
 use RhHardening\Log\EventLog;
+use RhHardening\Support\Log;
 
 /**
  * Meldung per Mail. Das Modul greift nicht ein, es schreibt und meldet.
@@ -166,10 +167,20 @@ final class Mailer
         $to = $this->recipient();
 
         if ($to === '') {
+            Log::note('Meldung nicht verschickt, kein gültiger Empfänger hinterlegt');
+
             return false;
         }
 
-        return (bool) wp_mail($to, $subject, $body);
+        $sent = (bool) wp_mail($to, $subject, $body);
+
+        if (! $sent) {
+            // Eine Meldung, die nicht ankommt, ist schlimmer als keine: man
+            // hält die Website für beobachtet, und sie ist es nicht.
+            Log::note('Meldung konnte nicht verschickt werden', ['betreff' => $subject]);
+        }
+
+        return $sent;
     }
 
     private function recipient(): string

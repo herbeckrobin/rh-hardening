@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace RhHardening\Integrity;
 
 use RhHardening\Shield\Shield;
+use RhHardening\Support\Env;
+use RhHardening\Support\Log;
 
 /**
  * Bewacht die Stellen, an denen sich eine Hintertür am liebsten einnistet.
@@ -101,6 +103,12 @@ final class HiddenScan implements StageScanner
     {
         $state = [];
 
+        if (! Env::has('hash_file')) {
+            Log::note('Heikle Stellen nicht prüfbar, hash_file ist gesperrt');
+
+            return [];
+        }
+
         foreach ($this->watchedFiles() as $path) {
             if (! is_file($path) || ! is_readable($path)) {
                 continue;
@@ -137,7 +145,7 @@ final class HiddenScan implements StageScanner
             $files[] = WP_CONTENT_DIR . '/' . $dropin;
         }
 
-        if (defined('WPMU_PLUGIN_DIR') && is_dir(WPMU_PLUGIN_DIR)) {
+        if (defined('WPMU_PLUGIN_DIR') && is_dir(WPMU_PLUGIN_DIR) && Env::has('glob')) {
             $shield = new Shield();
 
             foreach ((array) glob(WPMU_PLUGIN_DIR . '/*') as $entry) {

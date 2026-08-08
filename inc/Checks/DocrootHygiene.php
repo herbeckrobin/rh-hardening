@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace RhHardening\Checks;
 
 use RhHardening\Log\Event;
+use RhHardening\Support\Env;
 use RhHardening\Support\Loopback;
+use RhHardening\Support\Log;
 use RhHardening\Log\EventLog;
 
 /**
@@ -92,6 +94,12 @@ final class DocrootHygiene
     {
         $root = untrailingslashit(ABSPATH);
         $found = [];
+
+        if (! Env::has('glob')) {
+            Log::note('Wurzelverzeichnis nicht prüfbar, glob ist gesperrt');
+
+            return [];
+        }
 
         foreach (self::PATTERNS as $pattern) {
             $matches = glob($root . '/' . $pattern, GLOB_NOSORT);

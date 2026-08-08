@@ -6,6 +6,7 @@ namespace RhHardening\Integrity;
 
 use RhHardening\Log\Event;
 use RhHardening\Log\EventLog;
+use RhHardening\Support\Log;
 
 /**
  * Treibt den Prüflauf in Häppchen voran.
@@ -70,6 +71,8 @@ final class ScanRunner
         } catch (\Throwable $e) {
             $job = ScanJob::load();
             $job->fail($e->getMessage());
+
+            Log::note('Prüflauf abgebrochen', ['grund' => $e->getMessage(), 'abschnitt' => $job->stage]);
 
             EventLog::record(Event::warn(
                 Event::TYPE_SCAN_COMPLETED,
