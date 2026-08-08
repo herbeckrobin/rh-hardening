@@ -53,6 +53,12 @@ final class Ip
         }
 
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+            // Ohne diese Funktionen lieber gar keine Herkunft festhalten als
+            // eine ungekürzte: das wäre ein Personenbezug, den wir nicht wollen.
+            if (! Env::has('inet_pton') || ! Env::has('inet_ntop')) {
+                return '';
+            }
+
             $packed = @inet_pton($ip);
 
             if ($packed === false) {
