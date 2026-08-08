@@ -1,18 +1,26 @@
 === RH Hardening ===
 Contributors: robinherbeck
-Tags: security, hardening, headers, user enumeration, xmlrpc
+Tags: security, hardening, firewall, integrity, vulnerabilities
 Requires at least: 6.5
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.1.1
+Stable tag: 0.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Standard security hardening for WordPress: block user enumeration, disable feeds, set security headers, remove head clutter and XML-RPC.
+Security baseline for WordPress: a request shield that runs before WordPress, file integrity checks against wordpress.org, a vulnerability radar and an audit log.
 
 == Description ==
 
 RH Hardening applies the security baseline that every production WordPress site should have. Each measure is a toggle and on by default, so a fresh install is hardened out of the box.
+
+= Layers =
+
+* **Shield** - a small mu-plugin that inspects requests before WordPress builds its REST API. This is the only place where a flaw like wp2shell (CVE-2026-63030) can be stopped, because that one bypassed the permission check inside the request.
+* **Prevention** - toggles that remove attack surface: REST gatekeeper, application passwords, PHP execution in uploads, session hardening, file editor.
+* **Watch** - compares WordPress core and plugins against the official checksums from wordpress.org, guards the places WordPress loads unasked (mu-plugins, drop-ins, wp-config.php) and looks for executable files in the uploads folder.
+* **Radar** - checks daily whether a vulnerability is known for any installed plugin, theme or core. Reports only, never installs anything.
+* **Log and notification** - an audit log with truncated origin (no personal data), critical findings by mail, everything else in a weekly digest.
 
 = Measures =
 
@@ -27,6 +35,31 @@ The hook order is chosen deliberately: ?author= is blocked in parse_request (bef
 Part of the rh-blueprint collection. Settings live under RH Blueprint > Sicherheit.
 
 == Changelog ==
+
+= 0.7.0 =
+* Hardened the module itself: the upload probe now uses a random name, is always cleaned up and is never reported by its own scan.
+* Shield: invalid rule patterns are detected and logged instead of silently not matching; values above 8 KB skip the pattern match; queue writes are throttled to one per minute, so a scanner cannot amplify database load.
+* Vulnerability index is now processed as text instead of a decoded array: peak memory dropped from 24.8 MB to 2.0 MB, which keeps the radar working on hosts with a 64 MB limit.
+* All calls to functions that hosts commonly disable (glob, file_put_contents, hash_file, inet_pton) are guarded; the affected check is skipped and reported instead of causing a fatal error.
+* Error logging across the module: shield not deployable, feed unreachable, mail not sent, scan aborted.
+* The overview now states what the environment prevents: disabled WP-Cron, disabled functions, low memory limit.
+
+= 0.6.0 =
+* Security tab split into Overview, Protection, Monitoring and Log.
+* Fixed false positives after a WordPress update: the core checksum cache key now carries version and locale.
+
+= 0.5.0 =
+* Vulnerability radar: daily comparison against a curated feed, local matching, reports only.
+* Detects plugins that disappeared from the wordpress.org directory.
+
+= 0.4.0 =
+* Request shield as an mu-plugin, running before WordPress boots.
+
+= 0.3.0 =
+* File integrity: core and plugins against wordpress.org checksums, guarded locations, uploads scan.
+
+= 0.2.0 =
+* Audit log, mail notification, REST gatekeeper, access hardening, docroot hygiene check.
 
 = 0.1.0 =
 * Initial release: user enumeration block, feed disable, security headers, head cleanup, XML-RPC off, all as toggles.

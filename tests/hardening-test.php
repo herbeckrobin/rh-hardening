@@ -94,6 +94,8 @@ foreach ([
     'RhHardening\Radar\Radar',
     'RhHardening\Radar\FeedClient',
     'RhHardening\Radar\VersionRange',
+    'RhHardening\Support\Env',
+    'RhHardening\Support\Log',
 ] as $class) {
     check('lädt ' . $class, class_exists($class), true);
 }
@@ -183,6 +185,40 @@ check('gleiche Fassung wie die höchste betroffene', VersionRange::couldBeAffect
 check('eine Stelle neuer fällt raus', VersionRange::couldBeAffected('7.0.3', '7.0.2'), false);
 check('ohne Obergrenze immer prüfen', VersionRange::couldBeAffected('9.9.9', '*'), true);
 check('ohne Angabe lieber prüfen', VersionRange::couldBeAffected('1.0', ''), true);
+
+echo "\nHärtung des Moduls selbst\n";
+
+// Kaputte Muster dürfen nicht in den Regelsatz
+check('gültiges Muster wird angenommen', RhHardening\Shield\Rules::isValidPattern('/abc/i'), true);
+check('Muster ohne Trennzeichen wird abgelehnt', RhHardening\Shield\Rules::isValidPattern('kein-delimiter'), false);
+check('unvollständiges Muster wird abgelehnt', RhHardening\Shield\Rules::isValidPattern('/(ohne-ende'), false);
+check('leeres Muster wird abgelehnt', RhHardening\Shield\Rules::isValidPattern(''), false);
+
+// Die eigene Sonde darf der Prüflauf nicht als Fund melden
+check(
+    'eigene Sonde wird erkannt',
+    RhHardening\Prevention\Uploads::isProbeFile('/pfad/rh-hardening-probe-abc123.php'),
+    true
+);
+check(
+    'fremde Datei wird nicht als Sonde erkannt',
+    RhHardening\Prevention\Uploads::isProbeFile('/pfad/schaden.php'),
+    false
+);
+
+// Suche im Verzeichnis, ohne es zu dekodieren
+$index = "p:erstes 1.0\np:mein-plugin 1.2.3\nc:wordpress 7.0.2";
+check('Fassung wird im Text gefunden', RhHardening\Radar\FeedClient::highestAffected($index, 'p:mein-plugin'), '1.2.3');
+check('erste Zeile wird gefunden', RhHardening\Radar\FeedClient::highestAffected($index, 'p:erstes'), '1.0');
+check('unbekannter Slug findet nichts', RhHardening\Radar\FeedClient::highestAffected($index, 'p:gibtsnicht'), null);
+check(
+    'kein Treffer auf einen Namensanfang',
+    RhHardening\Radar\FeedClient::highestAffected($index, 'p:mein'),
+    null
+);
+
+// Speichergrenze richtig lesen
+check('Grenze in MB', RhHardening\Support\Env::memoryLimit() >= 0, true);
 
 printf("\n%s\n", $failures === 0 ? 'alles grün' : $failures . ' Fehler');
 
