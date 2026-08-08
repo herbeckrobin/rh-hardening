@@ -26,6 +26,12 @@ if (! defined('ABSPATH') || defined('RHHARD_SHIELD')) {
 
 define('RHHARD_SHIELD', '__RHHARD_SHIELD_VERSION__');
 
+/** Werte über dieser Grösse gehen nicht durch den Mustervergleich. */
+define('RHHARD_SHIELD_MAX_VALUE', 8192);
+
+/** So oft darf die Warteschlange höchstens geschrieben werden. */
+define('RHHARD_SHIELD_WRITE_EVERY', 60);
+
 (static function (): void {
     try {
         $rules = get_option('rhhard_shield_rules', null);
@@ -59,7 +65,11 @@ define('RHHARD_SHIELD', '__RHHARD_SHIELD_VERSION__');
                 'namespace_guest' => ! $looksLoggedIn
                     && $restRoute !== null
                     && rhhard_shield_starts_with($restRoute, (string) ($rule['value'] ?? '')),
-                'param' => rhhard_shield_param_hit((string) ($rule['param'] ?? ''), (string) ($rule['pattern'] ?? '')),
+                'param' => rhhard_shield_param_hit(
+                    (string) ($rule['param'] ?? ''),
+                    (string) ($rule['pattern'] ?? ''),
+                    (string) ($rule['id'] ?? 'unbenannt')
+                ),
                 'component' => $restRoute !== null
                     && rhhard_shield_starts_with($restRoute, (string) ($rule['value'] ?? '')),
                 default => false,
@@ -113,8 +123,17 @@ function rhhard_shield_starts_with(string $haystack, string $needle): bool
  * Sucht ein Muster in einem benannten Parameter, egal ob er per URL oder im
  * Rumpf ankommt. Der Vergleich läuft auch über verschachtelte Werte, weil
  * genau dort die Einschleusung bei wp2shell steckte.
+ *
+ * Zwei Vorsichtsmassnahmen, weil das hier bei JEDEM Aufruf läuft:
+ *
+ *   1. Sehr lange Werte gehen gar nicht erst durch den Mustervergleich. Ein
+ *      Parameter dieser Grösse ist ohnehin kein Normalfall, und ein ungünstiges
+ *      Muster könnte sich daran festfressen.
+ *   2. Ein ungültiges Muster liefert von preg_match false. Das darf nicht als
+ *      "kein Treffer" durchgehen, sonst schützt eine kaputte Regel stillschweigend
+ *      nicht mehr. Es wird vermerkt und die Regel greift nicht.
  */
-function rhhard_shield_param_hit(string $param, string $pattern): bool
+function rhhard_shield_param_hit(string $param, string $pattern, string $ruleId): bool
 {
     if ($param === '' || $pattern === '') {
         return false;
@@ -132,13 +151,54 @@ function rhhard_shield_param_hit(string $param, string $pattern): bool
                 continue;
             }
 
-            if (preg_match($pattern, (string) $value) === 1) {
+            $value = (string) $value;
+
+            if (strlen($value) > RHHARD_SHIELD_MAX_VALUE) {
+                return true;
+            }
+
+            $hit = @preg_match($pattern, $value);
+
+            if ($hit === false) {
+                rhhard_shield_broken_rule($ruleId);
+
+                return false;
+            }
+
+            if ($hit === 1) {
                 return true;
             }
         }
     }
 
     return false;
+}
+
+/**
+ * Vermerkt eine Regel, deren Muster nicht übersetzbar ist. Höchstens einmal je
+ * Stunde, damit ein dauerhaft kaputter Regelsatz nicht das Protokoll flutet.
+ */
+function rhhard_shield_broken_rule(string $ruleId): void
+{
+    $key = 'rhhard_shield_broken_' . md5($ruleId);
+
+    if (get_transient($key)) {
+        return;
+    }
+
+    set_transient($key, 1, HOUR_IN_SECONDS);
+
+    if (function_exists('error_log')) {
+        error_log('rh-hardening: Regel "' . $ruleId . '" hat ein ungültiges Muster und greift nicht.');
+    }
+
+    $queue = get_option('rhhard_shield_queue', []);
+    $queue = is_array($queue) ? $queue : [];
+
+    if (count($queue) < 50) {
+        $queue[] = ['regel' => $ruleId, 'ziel' => 'ungültiges Muster', 'zeit' => time(), 'defekt' => true];
+        update_option('rhhard_shield_queue', $queue, false);
+    }
 }
 
 function rhhard_shield_has_auth_cookie(): bool
@@ -159,20 +219,27 @@ function rhhard_shield_has_auth_cookie(): bool
  */
 function rhhard_shield_block(string $ruleId, string $target): void
 {
-    $queue = get_option('rhhard_shield_queue', []);
+    // Gedrosselt schreiben: ein Scanner mit tausenden Treffern soll nicht
+    // tausende Schreibvorgänge in der Datenbank auslösen. Sonst macht der
+    // Schutz den Angriff teurer für den Server statt billiger.
+    if (! get_transient('rhhard_shield_wrote')) {
+        set_transient('rhhard_shield_wrote', 1, RHHARD_SHIELD_WRITE_EVERY);
 
-    if (! is_array($queue)) {
-        $queue = [];
-    }
+        $queue = get_option('rhhard_shield_queue', []);
 
-    if (count($queue) < 50) {
-        $queue[] = [
-            'regel' => $ruleId,
-            'ziel' => $target,
-            'zeit' => time(),
-        ];
+        if (! is_array($queue)) {
+            $queue = [];
+        }
 
-        update_option('rhhard_shield_queue', $queue, false);
+        if (count($queue) < 50) {
+            $queue[] = [
+                'regel' => $ruleId,
+                'ziel' => $target,
+                'zeit' => time(),
+            ];
+
+            update_option('rhhard_shield_queue', $queue, false);
+        }
     }
 
     if (! headers_sent()) {

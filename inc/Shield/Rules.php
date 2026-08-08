@@ -91,10 +91,41 @@ final class Rules
     }
 
     /**
+     * Prüft, ob ein Muster überhaupt übersetzbar ist. Eine Regel mit kaputtem
+     * Muster gehört nicht in die Option: der Wall würde sie bei jedem Aufruf
+     * anfassen und nichts damit ausrichten.
+     */
+    public static function isValidPattern(string $pattern): bool
+    {
+        if ($pattern === '') {
+            return false;
+        }
+
+        return @preg_match($pattern, '') !== false;
+    }
+
+    /**
      * @param array<int, array<string, string>> $rules
      */
     public static function save(array $rules, bool $active): void
     {
+        $rules = array_values(array_filter($rules, static function (array $rule): bool {
+            if (($rule['type'] ?? '') !== 'param') {
+                return true;
+            }
+
+            if (self::isValidPattern((string) ($rule['pattern'] ?? ''))) {
+                return true;
+            }
+
+            \RhHardening\Support\Log::note(
+                'Regel mit ungültigem Muster verworfen',
+                ['regel' => (string) ($rule['id'] ?? 'unbenannt')]
+            );
+
+            return false;
+        }));
+
         // autoload, weil der Wall die Regeln bei JEDEM Aufruf braucht. Als
         // Teil des ohnehin geladenen Options-Satzes kostet das keine eigene
         // Abfrage.

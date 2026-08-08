@@ -7,6 +7,8 @@ namespace RhHardening\Shield;
 use RhHardening\Admin\HardeningGroup;
 use RhHardening\Log\Event;
 use RhHardening\Log\EventLog;
+use RhHardening\Support\Env;
+use RhHardening\Support\Log;
 
 /**
  * Legt den Schutzwall aus und hält ihn aktuell.
@@ -93,11 +95,24 @@ final class Shield
             ));
         }
 
-        $this->deploy();
+        if (! $this->deploy()) {
+            // Ohne diese Meldung liefe das Modul auf einem Hoster mit
+            // gesperrtem mu-plugins dauerhaft ohne seine wichtigste Schicht,
+            // und niemand wüsste davon.
+            Log::incident(
+                Event::TYPE_FILE_CHANGED,
+                __('Der Schutzwall konnte nicht ausgelegt werden. Auf dieser Website greift er nicht.', 'rh-hardening'),
+                ['verzeichnis' => defined('WPMU_PLUGIN_DIR') ? WPMU_PLUGIN_DIR : '?']
+            );
+        }
     }
 
     public function deploy(): bool
     {
+        if (! Env::has('file_put_contents')) {
+            return false;
+        }
+
         $dir = $this->directory();
 
         if ($dir === '') {
@@ -177,17 +192,32 @@ final class Shield
 
         foreach ($queue as $entry) {
             $rule = (string) ($entry['regel'] ?? 'unbekannt');
-            $byRule[$rule] ??= ['anzahl' => 0, 'ziel' => (string) ($entry['ziel'] ?? '')];
-            $byRule[$rule]['anzahl']++;
+            $byRule[$rule] ??= ['ziel' => (string) ($entry['ziel'] ?? ''), 'defekt' => ! empty($entry['defekt'])];
         }
 
         foreach ($byRule as $rule => $data) {
+            if ($data['defekt']) {
+                EventLog::record(Event::warn(
+                    Event::TYPE_REQUEST_BLOCKED,
+                    sprintf(
+                        /* translators: %s: Name der Regel */
+                        __('Die Regel "%s" des Schutzwalls hat ein ungültiges Muster und greift nicht.', 'rh-hardening'),
+                        $rule
+                    ),
+                    ['regel' => $rule]
+                ));
+
+                continue;
+            }
+
+            // Bewusst ohne Anzahl: geschrieben wird höchstens einmal pro
+            // Minute, eine Zahl wäre also erfunden. Wer wissen will, wie oft
+            // es passiert, sieht es an der Häufigkeit dieser Einträge.
             EventLog::record(Event::info(
                 Event::TYPE_REQUEST_BLOCKED,
                 sprintf(
-                    /* translators: 1: Anzahl, 2: Name der Regel */
-                    __('%1$d Aufruf(e) vom Schutzwall abgewiesen, Regel "%2$s"', 'rh-hardening'),
-                    $data['anzahl'],
+                    /* translators: %s: Name der Regel */
+                    __('Der Schutzwall hat Aufrufe abgewiesen, Regel "%s".', 'rh-hardening'),
                     $rule
                 ),
                 ['regel' => $rule, 'beispiel' => $data['ziel']]
