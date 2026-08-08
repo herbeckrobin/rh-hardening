@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RhHardening\Integrity;
 
+use RhHardening\Prevention\Uploads;
+
 /**
  * Sucht ausführbaren Code im Upload-Verzeichnis.
  *
@@ -46,6 +48,12 @@ final class UploadScan implements StageScanner
 
             $job->cursor = $index;
             $job->filesChecked++;
+
+            // Die eigene Sonde ist kein Fund. Sie lebt nur Sekundenbruchteile,
+            // aber ein Prüflauf zur selben Zeit würde sie sonst melden.
+            if (Uploads::isProbeFile($path)) {
+                continue;
+            }
 
             if ($this->isExecutable($path)) {
                 $job->addFinding('upload_executable', $this->shorten($path, $dir));

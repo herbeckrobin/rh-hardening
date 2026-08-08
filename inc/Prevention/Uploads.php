@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace RhHardening\Prevention;
 
 use RhHardening\Admin\HardeningGroup;
+use RhHardening\Support\Env;
 use RhHardening\Support\Loopback;
+use RhHardening\Support\Log;
 
 /**
  * Sperrt die Ausführung von PHP im Upload-Verzeichnis.
@@ -22,7 +24,7 @@ use RhHardening\Support\Loopback;
 final class Uploads
 {
     private const MARKER = 'rh-hardening';
-    private const PROBE_FILE = 'rh-hardening-probe.php';
+    private const PROBE_PREFIX = 'rh-hardening-probe-';
     private const PROBE_TOKEN = 'rh-hardening-probe-ok';
     private const STATUS_OPTION = 'rhhard_uploads_status';
 
@@ -65,6 +67,12 @@ final class Uploads
         $file = trailingslashit($dir) . '.htaccess';
 
         if (! is_writable($dir) && ! file_exists($file)) {
+            Log::incident(
+                \RhHardening\Log\Event::TYPE_DOCROOT_FINDING,
+                __('Die Sperre für das Upload-Verzeichnis konnte nicht geschrieben werden, das Verzeichnis ist nicht beschreibbar.', 'rh-hardening'),
+                ['verzeichnis' => $dir]
+            );
+
             return false;
         }
 
@@ -88,47 +96,100 @@ final class Uploads
             return $this->status('unknown', __('Upload-Verzeichnis nicht ermittelbar.', 'rh-hardening'));
         }
 
-        $path = trailingslashit($dir) . self::PROBE_FILE;
+        if (! Env::has('file_put_contents') || ! Env::has('unlink')) {
+            Log::note('Sonde nicht möglich, Dateifunktionen gesperrt');
+
+            return $this->status('unknown', __('Die Prüfung ist auf diesem Server nicht möglich, weil Dateifunktionen gesperrt sind.', 'rh-hardening'));
+        }
+
+        // Reste früherer Läufe wegräumen, bevor eine neue Sonde entsteht.
+        $this->removeStaleProbes($dir);
+
+        // Zufälliger Name: eine erratbare Datei im öffentlichen Verzeichnis
+        // wäre genau das, wovor dieses Modul warnt.
+        $name = self::PROBE_PREFIX . bin2hex(random_bytes(8)) . '.php';
+        $path = trailingslashit($dir) . $name;
         $written = @file_put_contents($path, "<?php echo '" . self::PROBE_TOKEN . "';");
 
         if ($written === false) {
+            Log::note('Sonde nicht schreibbar', ['verzeichnis' => $dir]);
+
             return $this->status('unknown', __('Sonde konnte nicht geschrieben werden, Verzeichnis ist nicht beschreibbar.', 'rh-hardening'));
         }
 
-        $result = Loopback::request(trailingslashit($url) . self::PROBE_FILE);
-        $response = $result['response'];
+        try {
+            $result = Loopback::request(trailingslashit($url) . $name);
+            $response = $result['response'];
 
-        @unlink($path);
+            if (is_wp_error($response)) {
+                Log::note('Sonde nicht abrufbar', ['grund' => $response->get_error_message()]);
 
-        if (is_wp_error($response)) {
-            return $this->status('unknown', sprintf(
-                /* translators: %s: Fehlermeldung */
-                __('Sonde nicht abrufbar: %s', 'rh-hardening'),
-                $response->get_error_message()
-            ));
+                return $this->status('unknown', sprintf(
+                    /* translators: %s: Fehlermeldung */
+                    __('Sonde nicht abrufbar: %s', 'rh-hardening'),
+                    $response->get_error_message()
+                ));
+            }
+
+            $hint = $result['unverified']
+                ? ' ' . __('(Das Zertifikat der Website war dabei nicht prüfbar.)', 'rh-hardening')
+                : '';
+
+            $code = (int) wp_remote_retrieve_response_code($response);
+            $body = (string) wp_remote_retrieve_body($response);
+
+            if ($code >= 400) {
+                return $this->status('blocked', sprintf(
+                    /* translators: 1: HTTP-Statuscode, 2: Hinweis zum Zertifikat */
+                    __('Sperre greift, der Aufruf wird mit %1$d abgewiesen.%2$s', 'rh-hardening'),
+                    $code,
+                    $hint
+                ));
+            }
+
+            if (str_contains($body, self::PROBE_TOKEN)) {
+                return $this->status('executing', __('PHP wird im Upload-Verzeichnis ausgeführt. Auf Nginx muss die Regel in die Server-Konfiguration, eine .htaccess reicht dort nicht.', 'rh-hardening') . $hint);
+            }
+
+            return $this->status('blocked', __('Sperre greift, die Datei wird nicht als PHP ausgeführt.', 'rh-hardening') . $hint);
+        } finally {
+            // Auch bei einem Fehler oder Abbruch: die Sonde muss weg.
+            @unlink($path);
+        }
+    }
+
+    /**
+     * Entfernt Sonden, die ein abgebrochener Lauf liegen gelassen hat.
+     *
+     * Stirbt der Prozess zwischen Schreiben und Aufräumen (Zeitlimit, Speicher,
+     * abgeschossener Worker), bliebe sonst eine ausführbare Datei im
+     * öffentlichen Verzeichnis stehen.
+     */
+    private function removeStaleProbes(string $dir): void
+    {
+        if (! Env::has('glob') || ! Env::has('unlink')) {
+            return;
         }
 
-        $hint = $result['unverified']
-            ? ' ' . __('(Das Zertifikat der Website war dabei nicht prüfbar.)', 'rh-hardening')
-            : '';
+        $matches = glob(trailingslashit($dir) . self::PROBE_PREFIX . '*.php', GLOB_NOSORT);
 
-        $code = (int) wp_remote_retrieve_response_code($response);
-        $body = (string) wp_remote_retrieve_body($response);
-
-        if ($code >= 400) {
-            return $this->status('blocked', sprintf(
-                /* translators: 1: HTTP-Statuscode, 2: Hinweis zum Zertifikat */
-                __('Sperre greift, der Aufruf wird mit %1$d abgewiesen.%2$s', 'rh-hardening'),
-                $code,
-                $hint
-            ));
+        if ($matches === false) {
+            return;
         }
 
-        if (str_contains($body, self::PROBE_TOKEN)) {
-            return $this->status('executing', __('PHP wird im Upload-Verzeichnis ausgeführt. Auf Nginx muss die Regel in die Server-Konfiguration, eine .htaccess reicht dort nicht.', 'rh-hardening') . $hint);
+        foreach ($matches as $stale) {
+            @unlink($stale);
+            Log::note('Übrig gebliebene Sonde entfernt', ['datei' => basename($stale)]);
         }
+    }
 
-        return $this->status('blocked', __('Sperre greift, die Datei wird nicht als PHP ausgeführt.', 'rh-hardening') . $hint);
+    /**
+     * Gehört diese Datei zu einer Sonde? Der eigene Prüflauf soll sie nicht als
+     * Fund melden, sonst zeigt sich das Modul selbst an.
+     */
+    public static function isProbeFile(string $filename): bool
+    {
+        return str_starts_with(basename($filename), self::PROBE_PREFIX);
     }
 
     /**
