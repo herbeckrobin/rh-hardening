@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace RhHardening\Radar;
 
 use RhHardening\Admin\HardeningGroup;
+use RhHardening\Support\Env;
+use RhHardening\Support\Log;
 
 /**
  * Holt die Schwachstellendaten vom Verteiler.
@@ -44,16 +46,22 @@ final class FeedClient
     private const CHUNK = 100;
 
     /**
-     * Das Verzeichnis: Slug-Schlüssel zur höchsten je betroffenen Fassung.
+     * Das Verzeichnis als Text, eine Zeile je Slug: "p:mein-plugin 1.2.3".
      *
-     * @return array<string, string>|null null, wenn der Verteiler nicht erreichbar ist
+     * Bewusst NICHT als Array: dekodiert kostet das Verzeichnis mit seinen
+     * 18.000 Einträgen rund 25 MB, gemessen. Bei einem Hoster mit 64 MB Grenze
+     * und WordPress-Grundlast ist damit Schluss, und das Radar fiele
+     * stillschweigend aus. Als Text sind es ein paar hundert Kilobyte, und die
+     * gut zwanzig eigenen Slugs sucht man einzeln darin.
+     *
+     * @return string|null null, wenn nichts zu holen war
      */
-    public function index(bool $force = false): ?array
+    public function index(bool $force = false): ?string
     {
         if (! $force) {
             $cached = get_transient(self::INDEX_TRANSIENT);
 
-            if (is_array($cached)) {
+            if (is_string($cached)) {
                 return $cached;
             }
         }
@@ -64,21 +72,64 @@ final class FeedClient
             return null;
         }
 
+        // Das Verzeichnis liegt bei rund einem halben Megabyte. Ist nicht
+        // einmal das Doppelte davon frei, gar nicht erst anfangen.
+        if (! Env::hasHeadroom(4 * MB_IN_BYTES)) {
+            Log::note('Radar übersprungen, zu wenig Arbeitsspeicher frei', [
+                'grenze' => (string) ini_get('memory_limit'),
+            ]);
+
+            return null;
+        }
+
         $response = wp_remote_get($url, $this->args());
 
-        if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
+        if (is_wp_error($response)) {
+            Log::note('Verzeichnis nicht abrufbar', ['grund' => $response->get_error_message()]);
+
+            return null;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+
+        if ($code !== 200) {
+            Log::note('Verzeichnis nicht abrufbar', ['status' => (string) $code]);
+
             return null;
         }
 
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
 
-        if (! is_array($data) || ! isset($data['index']) || ! is_array($data['index'])) {
+        if (! is_array($data) || ! isset($data['index']) || ! is_string($data['index'])) {
+            Log::note('Verzeichnis in unerwartetem Format');
+
             return null;
         }
 
         set_transient(self::INDEX_TRANSIENT, $data['index'], self::INDEX_TTL);
 
         return $data['index'];
+    }
+
+    /**
+     * Höchste je betroffene Fassung für einen Slug, ohne das ganze Verzeichnis
+     * in den Speicher zu holen. Ein strpos über ein paar hundert Kilobyte
+     * kostet nichts, zwanzigmal aufgerufen erst recht nicht.
+     */
+    public static function highestAffected(string $index, string $key): ?string
+    {
+        $needle = "\n" . $key . ' ';
+        $position = str_starts_with($index, $key . ' ') ? 0 : strpos($index, $needle);
+
+        if ($position === false) {
+            return null;
+        }
+
+        $start = $position === 0 ? strlen($key) + 1 : $position + strlen($needle);
+        $end = strpos($index, "\n", $start);
+        $value = $end === false ? substr($index, $start) : substr($index, $start, $end - $start);
+
+        return trim($value);
     }
 
     /**
@@ -103,7 +154,17 @@ final class FeedClient
                 $this->args()
             );
 
-            if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
+            if (is_wp_error($response)) {
+                Log::note('Einzelheiten nicht abrufbar', ['grund' => $response->get_error_message()]);
+
+                continue;
+            }
+
+            if ((int) wp_remote_retrieve_response_code($response) !== 200) {
+                Log::note('Einzelheiten nicht abrufbar', [
+                    'status' => (string) wp_remote_retrieve_response_code($response),
+                ]);
+
                 continue;
             }
 

@@ -6,6 +6,7 @@ namespace RhHardening\Radar;
 
 use RhHardening\Log\Event;
 use RhHardening\Log\EventLog;
+use RhHardening\Support\Log;
 
 /**
  * Gleicht die installierte Software gegen den Schwachstellen-Feed ab.
@@ -49,19 +50,24 @@ final class Radar
         $index = $client->index();
 
         if ($index === null) {
-            return $this->store('Verteiler nicht erreichbar', count($installed), 0, []);
+            Log::note('Radar ohne Verzeichnis, Lauf übersprungen');
+
+            return $this->store('Verzeichnis nicht abrufbar', count($installed), 0, []);
         }
 
         // Stufe 2: alles wegwerfen, was schon an der höchsten je gemeldeten
-        // Fassung vorbei ist. Das kostet nichts und spart fast immer den Abruf.
+        // Fassung vorbei ist. Gesucht wird im Text, damit das Verzeichnis nicht
+        // als Array im Speicher landen muss.
         $candidates = [];
 
         foreach ($installed as $key => $info) {
-            if (! isset($index[$key])) {
+            $highest = FeedClient::highestAffected($index, $key);
+
+            if ($highest === null) {
                 continue;
             }
 
-            if (VersionRange::couldBeAffected($info['version'], (string) $index[$key])) {
+            if (VersionRange::couldBeAffected($info['version'], $highest)) {
                 $candidates[$key] = $info;
             }
         }
