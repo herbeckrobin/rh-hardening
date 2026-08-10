@@ -6,6 +6,8 @@ namespace RhHardening\Admin;
 
 use RhBlueprint\Core\Settings\SettingField;
 use RhBlueprint\Core\Settings\SettingsHub;
+use RhHardening\Csp\Violations;
+use RhHardening\Prevention\Csp;
 use RhBlueprint\Core\Settings\SettingsPage;
 
 /**
@@ -138,6 +140,10 @@ final class SecurityPage
             return '';
         }
 
+        if ($fieldId === HardeningGroup::FIELD_CSP_MODE) {
+            return $this->cspNote((string) $value);
+        }
+
         // Beim Auswahlfeld ist die Stufe die eigentliche Information.
         if ($fieldId === HardeningGroup::FIELD_REST_MODE) {
             $label = (string) $value === 'strict'
@@ -148,6 +154,122 @@ final class SecurityPage
         }
 
         return '';
+    }
+
+    /**
+     * Bei der Policy zeigt die Pille den Modus und, solange gesammelt wird, wie
+     * lange noch. Das ist die Information, die man in der Zeile braucht: läuft
+     * das noch, oder muss ich mich jetzt entscheiden.
+     */
+    private function cspNote(string $modus): string
+    {
+        if ($modus === Csp::MODE_ENFORCE) {
+            return '<span class="rhbp-pill rhbp-pill--ok"><span class="rhbp-pill__dot"></span>'
+                . esc_html__('scharf', 'rh-hardening') . '</span>';
+        }
+
+        if (! Csp::isCollecting()) {
+            return '<span class="rhbp-pill"><span class="rhbp-pill__dot"></span>'
+                . esc_html__('beobachtet, Sammlung beendet', 'rh-hardening') . '</span>';
+        }
+
+        $rest = Csp::collectingUntil() - time();
+        $tage = (int) ceil($rest / DAY_IN_SECONDS);
+
+        return '<span class="rhbp-pill rhbp-pill--warn"><span class="rhbp-pill__dot"></span>'
+            . esc_html(sprintf(
+                /* translators: %d: Anzahl Tage */
+                _n('sammelt, noch %d Tag', 'sammelt, noch %d Tage', $tage, 'rh-hardening'),
+                $tage
+            ))
+            . '</span>';
+    }
+
+    /**
+     * Der Block unter den Feldern: was gesammelt wurde, der daraus gebaute
+     * Vorschlag, und die Knöpfe dazu.
+     */
+    private function modalExtra(string $fieldId): void
+    {
+        if ($fieldId !== HardeningGroup::FIELD_CSP_MODE) {
+            return;
+        }
+
+        $gruppen = Violations::all();
+        $laeuft = Csp::isCollecting();
+
+        echo '<div class="rhbp-field">';
+        printf('<strong>%s</strong>', esc_html__('Gesammelt', 'rh-hardening'));
+
+        if ($gruppen === []) {
+            printf(
+                '<p class="description">%s</p>',
+                $laeuft
+                    ? esc_html__('Noch nichts. Ein paar Seiten der Website aufrufen, dann füllt sich die Liste von allein.', 'rh-hardening')
+                    : esc_html__('Nichts gesammelt. Die Sammlung läuft gerade nicht.', 'rh-hardening')
+            );
+        } else {
+            // Häufigstes zuerst, das ist meistens das Wichtigste.
+            uasort($gruppen, static fn (array $a, array $b): int => $b['anzahl'] <=> $a['anzahl']);
+
+            echo '<table class="rhbp-table"><thead><tr>';
+            printf('<th>%s</th>', esc_html__('Regel', 'rh-hardening'));
+            printf('<th>%s</th>', esc_html__('Quelle', 'rh-hardening'));
+            printf('<th>%s</th>', esc_html__('Fälle', 'rh-hardening'));
+            echo '</tr></thead><tbody>';
+
+            foreach (array_slice($gruppen, 0, 25) as $gruppe) {
+                echo '<tr>';
+                printf('<td><code>%s</code></td>', esc_html((string) $gruppe['direktive']));
+                printf('<td><code>%s</code></td>', esc_html((string) $gruppe['quelle']));
+                printf('<td>%s</td>', esc_html((string) $gruppe['anzahl']));
+                echo '</tr>';
+            }
+
+            echo '</tbody></table>';
+
+            $vorschlag = Violations::suggestion();
+
+            if ($vorschlag !== '') {
+                printf('<p><strong>%s</strong></p>', esc_html__('Daraus gebaute Regeln', 'rh-hardening'));
+                printf('<pre class="rhbp-codebox">%s</pre>', esc_html($vorschlag));
+                printf(
+                    '<p class="description">%s</p>',
+                    esc_html__('Das ist, was die Website tatsächlich lädt. Ob sie das auch laden soll, entscheidet niemand außer dir: eine fremde Quelle in dieser Liste kann genauso gut der Einbruch sein, den die Policy verhindern soll.', 'rh-hardening')
+                );
+            }
+        }
+
+        echo '<p class="rhhard-actions">';
+
+        if ($laeuft) {
+            printf(
+                '<button type="submit" name="csp_aktion" value="stop" class="rhbp-btn rhbp-btn--ghost">%s</button> ',
+                esc_html__('Sammlung beenden', 'rh-hardening')
+            );
+        } else {
+            printf(
+                '<button type="submit" name="csp_aktion" value="start" class="rhbp-btn rhbp-btn--ghost">%s</button> ',
+                esc_html(sprintf(
+                    /* translators: %d: Anzahl Tage */
+                    __('Sammlung starten (%d Tage)', 'rh-hardening'),
+                    Csp::COLLECT_DAYS
+                ))
+            );
+        }
+
+        if ($gruppen !== []) {
+            printf(
+                '<button type="submit" name="csp_aktion" value="uebernehmen" class="rhbp-btn rhbp-btn--ghost">%s</button> ',
+                esc_html__('Regeln übernehmen', 'rh-hardening')
+            );
+            printf(
+                '<button type="submit" name="csp_aktion" value="leeren" class="rhbp-btn rhbp-btn--ghost">%s</button>',
+                esc_html__('Gesammeltes verwerfen', 'rh-hardening')
+            );
+        }
+
+        echo '</p></div>';
     }
 
     /**
@@ -203,6 +325,8 @@ final class SecurityPage
             echo '</div>';
         }
 
+        $this->modalExtra($fieldId);
+
         echo '</div>';
 
         echo '<div class="rhbp-modal__foot">';
@@ -231,6 +355,29 @@ final class SecurityPage
 
         // Ein Auswahlfeld kennt kein An und Aus, deshalb bedeutet der Schalter
         // dort: zurück auf den Standard, oder ganz abschalten.
+        if ($fieldId === HardeningGroup::FIELD_CSP_MODE) {
+            // Beim Einschalten immer der beobachtende Modus, nie sofort scharf.
+            // Und die Sammlung läuft mit an, weil ohne sie der Modus nichts
+            // bringt: man sähe nicht, was die Regeln blockieren würden.
+            if ($on) {
+                $this->store($fieldId, Csp::MODE_REPORT);
+
+                // Ohne Regeln geht kein Header raus, also würde auch nichts
+                // gemeldet. Ein Schalter, der drei Tage lang nichts sammelt und
+                // dabei "sammelt" anzeigt, ist schlimmer als keiner.
+                if (trim((string) $this->value(HardeningGroup::FIELD_CSP_POLICY)) === '') {
+                    $this->store(HardeningGroup::FIELD_CSP_POLICY, Csp::STARTER_POLICY);
+                }
+
+                Csp::startCollecting();
+            } else {
+                $this->store($fieldId, Csp::MODE_OFF);
+                Csp::stopCollecting();
+            }
+
+            $this->back();
+        }
+
         if (! empty($_POST['auswahl'])) {
             $this->store($fieldId, $on ? (string) $field->default : 'off');
         } else {
@@ -260,7 +407,36 @@ final class SecurityPage
             }
         }
 
+        $this->handleCspAction();
+
         $this->back();
+    }
+
+    /**
+     * Die Knöpfe im CSP-Block sitzen im selben Formular wie die Felder, weil
+     * ein Formular im Formular nicht zulässig ist. Sie melden sich über einen
+     * eigenen Parameter.
+     */
+    private function handleCspAction(): void
+    {
+        $aktion = isset($_POST['csp_aktion']) ? sanitize_key((string) wp_unslash($_POST['csp_aktion'])) : '';
+
+        match ($aktion) {
+            'start' => Csp::startCollecting(),
+            'stop' => Csp::stopCollecting(),
+            'leeren' => Violations::clear(),
+            'uebernehmen' => $this->applySuggestion(),
+            default => null,
+        };
+    }
+
+    private function applySuggestion(): void
+    {
+        $vorschlag = Violations::suggestion();
+
+        if ($vorschlag !== '') {
+            $this->store(HardeningGroup::FIELD_CSP_POLICY, $vorschlag);
+        }
     }
 
     /**

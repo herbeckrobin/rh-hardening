@@ -124,3 +124,21 @@
 .rhbp-settings .rhhard-subtabs ~ .rhbp-card .rhbp-card-grid {
     margin-bottom: 14px;
 }
+
+/* Die Knopfreihe im Policy-Block. Sitzt im selben Formular wie die Felder,
+   deshalb umbruchfähig statt in einer starren Zeile. */
+.rhhard-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 16px 0 0;
+}
+
+/* Der Regel-Vorschlag ist eine lange Zeile ohne Leerzeichen an den richtigen
+   Stellen. Ohne das hier schiebt er das Modal auf. */
+.rhbp-modal .rhbp-codebox {
+	max-width: 100%;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+}

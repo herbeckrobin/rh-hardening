@@ -57,6 +57,7 @@ final class Sections
                     'felder' => [
                         HardeningGroup::FIELD_SHIELD,
                         HardeningGroup::FIELD_REST_MODE,
+                        HardeningGroup::FIELD_CSP_MODE,
                         HardeningGroup::FIELD_BLOCK_USER_ENUM,
                         HardeningGroup::FIELD_DISABLE_XMLRPC,
                         HardeningGroup::FIELD_UPLOADS_NO_PHP,
@@ -112,6 +113,7 @@ final class Sections
     {
         return [
             HardeningGroup::FIELD_SHIELD => __('Weist Angriffe ab, bevor WordPress überhaupt startet.', 'rh-hardening'),
+            HardeningGroup::FIELD_CSP_MODE => __('Sagt dem Browser, welche Quellen er laden darf.', 'rh-hardening'),
             HardeningGroup::FIELD_REST_MODE => __('Sperrt Gästen die bekannten Problem-Routen der Schnittstelle.', 'rh-hardening'),
             HardeningGroup::FIELD_BLOCK_USER_ENUM => __('Verhindert, dass Anmeldenamen von außen auslesbar sind.', 'rh-hardening'),
             HardeningGroup::FIELD_DISABLE_XMLRPC => __('Schaltet eine alte Schnittstelle ab, die kaum noch gebraucht wird.', 'rh-hardening'),
@@ -141,6 +143,10 @@ final class Sections
             HardeningGroup::FIELD_REST_MODE => [
                 HardeningGroup::FIELD_REST_MODE,
                 HardeningGroup::FIELD_REST_ALLOWLIST,
+            ],
+            HardeningGroup::FIELD_CSP_MODE => [
+                HardeningGroup::FIELD_CSP_MODE,
+                HardeningGroup::FIELD_CSP_POLICY,
             ],
             HardeningGroup::FIELD_NOTIFY => [
                 HardeningGroup::FIELD_NOTIFY_EMAIL,
