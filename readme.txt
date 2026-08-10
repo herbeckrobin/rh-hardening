@@ -4,7 +4,7 @@ Tags: security, hardening, firewall, integrity, vulnerabilities
 Requires at least: 6.5
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.7.0
+Stable tag: 0.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,6 +35,11 @@ The hook order is chosen deliberately: ?author= is blocked in parse_request (bef
 Part of the rh-blueprint collection. Settings live under RH Blueprint > Sicherheit.
 
 == Changelog ==
+
+= 0.8.0 =
+* Content-Security-Policy with a guided rollout: the policy first runs in observe mode, the browser reports what it would have blocked, and the module builds a rule suggestion from what was collected. Only then is it worth switching to enforce.
+* Collection is opt-in, switches itself off after three days and only then exposes a reporting endpoint. Nothing personal is stored: no query parameters, no referrer, no visitor origin, and reports are grouped per rule and source instead of logged one by one.
+* Both reporting mechanisms are supported. report-uri is formally deprecated but is still the only one Firefox implements for CSP, so it is sent alongside report-to and Reporting-Endpoints.
 
 = 0.7.0 =
 * Hardened the module itself: the upload probe now uses a random name, is always cleaned up and is never reported by its own scan.
