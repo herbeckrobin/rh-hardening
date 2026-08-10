@@ -12,6 +12,7 @@ use RhHardening\Admin\SecurityPanel;
 use RhHardening\Integrity\ScanRunner;
 use RhHardening\Notify\Mailer;
 use RhHardening\Prevention\Access;
+use RhHardening\Prevention\Csp;
 use RhHardening\Prevention\RestGate;
 use RhHardening\Prevention\Uploads;
 use RhHardening\Radar\Radar;
@@ -73,6 +74,7 @@ final class Plugin
         (new RestGate())->boot();
         (new Access())->boot();
         (new Uploads())->boot();
+        (new Csp())->boot();
         (new Shield())->boot();
 
         // Radar und Meldung

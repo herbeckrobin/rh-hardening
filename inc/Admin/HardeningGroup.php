@@ -6,6 +6,7 @@ namespace RhHardening\Admin;
 
 use RhBlueprint\Core\Settings\GroupInterface;
 use RhBlueprint\Core\Settings\SettingField;
+use RhHardening\Prevention\Csp;
 use RhHardening\Prevention\RestGate;
 
 /**
@@ -29,6 +30,8 @@ final class HardeningGroup implements GroupInterface
 
     // Angriffsfläche
     public const FIELD_SHIELD = 'shield';
+    public const FIELD_CSP_MODE = 'csp_mode';
+    public const FIELD_CSP_POLICY = 'csp_policy';
     public const FIELD_REST_MODE = 'rest_mode';
     public const FIELD_REST_ALLOWLIST = 'rest_allowlist';
     public const FIELD_DISABLE_APP_PASSWORDS = 'disable_app_passwords';
@@ -84,6 +87,27 @@ final class HardeningGroup implements GroupInterface
                 description: __('Legt eine kleine Datei in mu-plugins ab, die Aufrufe prüft, bevor WordPress die REST-Schnittstelle überhaupt aufbaut. Nur so lässt sich eine Lücke abfangen, die wie wp2shell mitten in der Verarbeitung zuschlägt. Die Datei wird bei jedem Update neu ausgelegt, ihr Zustand steht unten. Wird sie verändert, meldet das Modul das als Verdachtsfall.', 'rh-hardening'),
                 default: true,
                 keywords: ['firewall', 'waf', 'mu-plugin', 'shield', 'wp2shell', 'batch'],
+            ),
+            new SettingField(
+                id: self::FIELD_CSP_MODE,
+                type: SettingField::TYPE_SELECT,
+                label: __('Content-Security-Policy', 'rh-hardening'),
+                description: __('Der einzige Header, der Cross-Site-Scripting wirklich stoppt, und der einzige, den man nicht blind setzen kann. Der Weg führt über "beobachten": die Regeln gelten zuerst nur auf dem Papier, der Browser meldet, was er blockiert hätte, und aus dem Gesammelten entsteht ein Vorschlag. Wer sofort scharf schaltet, sperrt zuverlässig die halbe Website aus.', 'rh-hardening'),
+                default: Csp::MODE_OFF,
+                choices: [
+                    Csp::MODE_OFF => __('Aus', 'rh-hardening'),
+                    Csp::MODE_REPORT => __('Beobachten, nichts blockieren', 'rh-hardening'),
+                    Csp::MODE_ENFORCE => __('Scharf, Regeln greifen', 'rh-hardening'),
+                ],
+                keywords: ['csp', 'content security policy', 'xss', 'header'],
+            ),
+            new SettingField(
+                id: self::FIELD_CSP_POLICY,
+                type: SettingField::TYPE_TEXTAREA,
+                label: __('Regeln', 'rh-hardening'),
+                description: __('Die Regeln ohne den Meldeweg, der wird bei laufender Sammlung selbst angehängt. Ein brauchbarer Anfang ist: default-src \'self\'; img-src \'self\' data:; style-src \'self\' \'unsafe-inline\'', 'rh-hardening'),
+                default: '',
+                keywords: ['csp', 'policy', 'regeln', 'directives'],
             ),
             new SettingField(
                 id: self::FIELD_REST_MODE,

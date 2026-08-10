@@ -7,6 +7,7 @@ namespace RhHardening\Prevention;
 use RhHardening\Admin\HardeningGroup;
 use RhHardening\Log\Event;
 use RhHardening\Log\EventLog;
+use RhHardening\Prevention\Csp;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Server;
@@ -57,6 +58,9 @@ final class RestGate
      */
     private const ALWAYS_ALLOWED = [
         'oembed/1.0',
+        // Der eigene Meldeweg für die Content-Security-Policy. Existiert nur,
+        // solange gesammelt wird, muss dann aber erreichbar sein.
+        Csp::ROUTE_NAMESPACE,
     ];
 
     /** Gegen Log-Fluten: pro Route höchstens ein Eintrag je Stunde. */
