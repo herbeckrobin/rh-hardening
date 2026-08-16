@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RhHardening;
 
 use RhBlueprint\Core\Core;
+use RhHardening\Admin\Sections;
 use RhBlueprint\Core\UpdateChecker;
 use RhBlueprint\Core\Settings\SettingsPage;
 use RhHardening\Admin\HardeningGroup;
@@ -66,7 +67,7 @@ final class Plugin
     {
         // Nur den Tab anmelden, nicht die Gruppe: die Felder rendert
         // SecurityPage selbst, sonst käme die Formularliste des Core dazu.
-        $core->settings()->registerTab('hardening', __('Sicherheit', 'rh-hardening'), 40);
+        $core->settings()->registerTab(Sections::TAB_ID, __('Sicherheit', 'rh-hardening'), 40);
 
         // Prävention
         (new Hardening())->boot();
@@ -89,7 +90,7 @@ final class Plugin
         add_filter('rh-blueprint/dashboard/quick_links', static function (array $links): array {
             $links[] = [
                 'label' => __('Sicherheit', 'rh-hardening'),
-                'url' => admin_url('admin.php?page=' . SettingsPage::MENU_SLUG . '&tab=hardening'),
+                'url' => admin_url('admin.php?page=' . SettingsPage::MENU_SLUG . '&tab=' . Sections::TAB_ID),
                 'icon' => 'shield',
             ];
             return $links;

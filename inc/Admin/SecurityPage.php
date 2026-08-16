@@ -100,7 +100,7 @@ final class SecurityPage
                 esc_attr('rhhard-' . $fieldId),
                 esc_attr__('Einstellungen', 'rh-hardening'),
                 esc_attr__('Einstellungen', 'rh-hardening'),
-                $this->gearIcon()
+                Ui::icon('gear')
             );
         }
 
@@ -291,33 +291,20 @@ final class SecurityPage
         // Einmal auflösen statt an drei Stellen dieselbe Frage stellen.
         $titel = $base instanceof SettingField ? $base->label : '';
 
-        // Das Core-JS findet das Modal über die id und schaltet die Klasse
-        // is-open. Kein hidden-Attribut dazu: das gewinnt gegen die Klasse und
-        // das Modal bliebe unsichtbar.
-        printf('<div class="rhbp-modal-backdrop" id="%s" data-rhbp-modal-backdrop>', esc_attr('rhhard-' . $fieldId));
+        // Das Formular umschliesst hier den ganzen Dialog, weil der
+        // Speichern-Knopf im Fuss sitzt. Deshalb die Adresse an modalOpen und
+        // form:true an modalClose, sonst laege der Knopf ausserhalb.
+        echo Ui::modalOpen([
+            'id' => 'rhhard-' . $fieldId,
+            'title' => $titel !== '' ? $titel : __('Einstellungen', 'rh-hardening'),
+            'titleTag' => 'h2',
+            'icon' => '',
+            'form' => admin_url('admin-post.php'),
+        ]);
 
-        // Ohne Rolle und aria-modal ist das für einen Screenreader kein Dialog,
-        // sondern ein Stück Seite, das ohne Ankündigung auftaucht. Alle anderen
-        // Dialoge der Suite haben beides, dieser war der einzige ohne.
-        printf(
-            '<div class="rhbp-modal" role="dialog" aria-modal="true" aria-label="%s">',
-            esc_attr($titel !== '' ? $titel : __('Einstellungen', 'rh-hardening'))
-        );
-        printf('<form method="post" action="%s">', esc_url(admin_url('admin-post.php')));
         wp_nonce_field(self::ACTION_SAVE);
         printf('<input type="hidden" name="action" value="%s" />', esc_attr(self::ACTION_SAVE));
         printf('<input type="hidden" name="sub" value="%s" />', esc_attr(Sections::current()));
-
-        echo '<div class="rhbp-modal__head"><div class="rhbp-modal__head-l">';
-        printf('<h2 class="rhbp-modal__title">%s</h2>', esc_html($titel));
-        echo '</div>';
-        printf(
-            '<button type="button" class="rhbp-btn rhbp-btn--icon" data-rhbp-modal-close aria-label="%s">&times;</button>',
-            esc_attr__('Schließen', 'rh-hardening')
-        );
-        echo '</div>';
-
-        echo '<div class="rhbp-modal__body">';
 
         foreach ($extras as $extraId) {
             $field = $this->field($extraId);
@@ -340,17 +327,11 @@ final class SecurityPage
 
         $this->modalExtra($fieldId);
 
-        echo '</div>';
-
-        echo '<div class="rhbp-modal__foot">';
-        printf(
-            '<button type="button" class="rhbp-btn rhbp-btn--ghost" data-rhbp-modal-close>%s</button>',
-            esc_html__('Abbrechen', 'rh-hardening')
-        );
-        printf('<button type="submit" class="rhbp-btn rhbp-btn--primary">%s</button>', esc_html__('Speichern', 'rh-hardening'));
-        echo '</div>';
-
-        echo '</form></div></div>';
+        echo Ui::modalClose([
+            'primary' => __('Speichern', 'rh-hardening'),
+            'cancel' => __('Abbrechen', 'rh-hardening'),
+            'form' => true,
+        ]);
     }
 
     public function handleToggle(): void
@@ -527,8 +508,4 @@ final class SecurityPage
         ));
     }
 
-    private function gearIcon(): string
-    {
-        return '<svg class="rhbp-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
-    }
 }

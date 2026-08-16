@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace RhHardening\Admin;
 
+use RhBlueprint\Core\Admin\Assets;
 use RhBlueprint\Core\Admin\Guard;
 use RhBlueprint\Core\Admin\MailPanel;
 
@@ -45,7 +46,7 @@ final class SecurityPanel
 
     public function enqueue(string $hook): void
     {
-        if (! str_contains($hook, SettingsPage::MENU_SLUG)) {
+        if (! Assets::onSettings(Sections::TAB_ID)) {
             return;
         }
 
@@ -79,7 +80,7 @@ final class SecurityPanel
                 break;
 
             case MailPanel::TAB:
-                (new MailPanel())->render('hardening');
+                (new MailPanel())->render(Sections::TAB_ID);
                 break;
 
             default:

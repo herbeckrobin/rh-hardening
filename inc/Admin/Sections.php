@@ -19,6 +19,9 @@ use RhBlueprint\Core\Admin\MailPanel;
  */
 final class Sections
 {
+    /** Der Reiter der Suite, in dem dieses Modul sitzt. Stand vorher viermal als Zeichenkette da. */
+    public const TAB_ID = 'hardening';
+
     public const TAB_OVERVIEW = 'ueberblick';
     public const TAB_PROTECT = 'schutz';
     public const TAB_WATCH = 'ueberwachung';
@@ -38,7 +41,7 @@ final class Sections
 
         // Die Mail-Einstellungen des Moduls kommen aus dem Core, gehören aber
         // in diese Leiste und nicht in eine zweite darüber.
-        $mail = MailPanel::tabLabel('hardening');
+        $mail = MailPanel::tabLabel(self::TAB_ID);
 
         if ($mail !== null) {
             $tabs[MailPanel::TAB] = $mail;
