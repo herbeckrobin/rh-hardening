@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace RhHardening\Notify;
 
+use RhBlueprint\Core\Mail\Mail;
+use RhBlueprint\Core\Mail\MailKind;
+use RhBlueprint\Core\Mail\MailMessage;
+use RhBlueprint\Core\Mail\MailSettings;
+use RhBlueprint\Core\Mail\ReportSection;
 use RhHardening\Admin\HardeningGroup;
 use RhHardening\Log\Event;
 use RhHardening\Log\EventLog;
@@ -12,9 +17,14 @@ use RhHardening\Support\Log;
 /**
  * Meldung per Mail. Das Modul greift nicht ein, es schreibt und meldet.
  *
- * Zwei Stufen, damit nicht jede Kleinigkeit weckt:
- *   - Kritisch geht sofort raus, einzeln.
- *   - Alles andere sammelt sich und geht als Wochenbericht.
+ * Zwei Wege, damit nicht jede Kleinigkeit weckt:
+ *   - Kritisches geht sofort raus, als eigene Mail.
+ *   - Alles andere wird ein Abschnitt im Sammelbericht der Suite.
+ *
+ * Einen eigenen Wochenbericht gibt es nicht mehr. Er stand neben dem
+ * Sammelbericht und sagte dasselbe, nur in einer zweiten Mail. Ohne ein
+ * installiertes E-Mail-Modul bekommt diese Website also keinen Wochenbericht,
+ * darauf weist der Hinweis im Tab hin.
  *
  * Empfänger ist per Default die Admin-Adresse der Site, in der Praxis trägt man
  * dort die Adresse des Betreuers ein, nicht die des Endkunden.
@@ -27,17 +37,85 @@ final class Mailer
     private const THROTTLE_TRANSIENT = 'rhhard_mail_throttle';
     private const THROTTLE_MAX_PER_HOUR = 10;
 
+    /** Kennungen der Mail-Arten, die dieses Modul verschickt. */
+    public const KIND_ALERT = 'hardening.alert';
+    public const KIND_REPORT = 'hardening.report';
+
     public function boot(): void
     {
+        $this->registerKinds();
+
         add_action('rh-hardening/event_recorded', [$this, 'onEvent'], 10, 2);
-        add_action(self::CRON_DIGEST, [$this, 'sendDigest']);
+
+        // Beitrag zum Sammelbericht der Suite. Wird nur abgefragt, wenn das
+        // E-Mail-Modul einen Bericht verschickt.
+        add_filter('rh-blueprint/report/sections', [$this, 'reportSection'], 10, 2);
+
+        // Hinweis im eigenen Tab, falls es hier keinen Sammelbericht gibt.
+        add_filter('rh-blueprint/addon_hints', [$this, 'addonHint']);
     }
 
+    /**
+     * Was dieses Modul verschicken kann. Daraus baut der Core die Oberfläche
+     * hinter dem Briefumschlag im Sicherheits-Tab.
+     */
+    private function registerKinds(): void
+    {
+        MailKind::register(self::KIND_ALERT, [
+            'module' => 'hardening',
+            'label' => __('Sicherheitsmeldung', 'rh-hardening'),
+            'summary' => __('Sobald etwas nach einem Eingriff von aussen aussieht, etwa eine veränderte Datei an heikler Stelle.', 'rh-hardening'),
+            'timing' => MailKind::TIMING_IMMEDIATE,
+            'urgent' => true,
+        ]);
+
+        MailKind::register(self::KIND_REPORT, [
+            'module' => 'hardening',
+            'label' => __('Abschnitt Sicherheit', 'rh-hardening'),
+            'summary' => __('Geprüfte Dateien, Zustand des Schutzwalls und was angesehen gehört.', 'rh-hardening'),
+            'timing' => MailKind::TIMING_REPORT,
+        ]);
+    }
+
+    /**
+     * @param array<int, ReportSection> $sections
+     * @return array<int, ReportSection>
+     */
+    public function reportSection(array $sections, int $since): array
+    {
+        if (! MailSettings::enabled(self::KIND_REPORT)) {
+            return $sections;
+        }
+
+        $report = new DigestReport(gmdate('Y-m-d H:i:s', $since));
+        $sections[] = $report->buildSection($this->chronicleUrl());
+
+        return $sections;
+    }
+
+    /**
+     * @param array<int, array{tab: string, module: string, benefit: string}> $hints
+     * @return array<int, array{tab: string, module: string, benefit: string}>
+     */
+    public function addonHint(array $hints): array
+    {
+        $hints[] = [
+            'tab' => 'hardening',
+            'module' => 'rh-smtp',
+            'benefit' => __('Sicherheitsmeldungen im Aussehen der Suite, ein gemeinsamer Bericht mit den anderen Modulen und ein Schutz davor, dass eine Testkopie echte Mails verschickt.', 'rh-hardening'),
+        ];
+
+        return $hints;
+    }
+
+    /**
+     * Nichts mehr einzuplanen: den Wochenbericht verschickt der Sammelbericht
+     * der Suite. Die Methode bleibt, weil der Installer sie aufruft, und raeumt
+     * den alten Termin gleich mit weg.
+     */
     public static function scheduleCron(): void
     {
-        if (! wp_next_scheduled(self::CRON_DIGEST)) {
-            wp_schedule_event(time() + HOUR_IN_SECONDS, 'weekly', self::CRON_DIGEST);
-        }
+        self::clearCron();
     }
 
     public static function clearCron(): void
@@ -59,13 +137,11 @@ final class Mailer
             return;
         }
 
+        // Betreff ohne Domain und ohne Themen-Klammer: beides setzt die
+        // Betreffkonvention des E-Mail-Moduls davor, sonst steht es doppelt da.
         $sent = $this->send(
-            sprintf(
-                /* translators: %s: Domain der Website */
-                __('[Sicherheit] Auffälligkeit auf %s', 'rh-hardening'),
-                $this->siteHost()
-            ),
-            $this->criticalBody($event)
+            __('Auffälligkeit auf der Website', 'rh-hardening'),
+            $this->criticalMessage($event)
         );
 
         if ($sent) {
@@ -73,96 +149,38 @@ final class Mailer
         }
     }
 
-    /**
-     * Wochenbericht über alles, was noch nicht gemeldet wurde.
-     */
-    public function sendDigest(): void
+
+    private function criticalMessage(Event $event): MailMessage
     {
-        if (! $this->notificationsEnabled()) {
-            return;
-        }
+        $message = new MailMessage(
+            __('Sicherheitsmeldung', 'rh-hardening'),
+            $this->siteHost()
+        );
 
-        $since = gmdate('Y-m-d H:i:s', time() - WEEK_IN_SECONDS);
-        $pending = EventLog::query([
-            'since' => $since,
-            'notified' => 0,
-            'limit' => 200,
-        ]);
+        $message->kind(self::KIND_ALERT);
+        $message->status(MailMessage::TONE_ALERT, $event->message);
+        $message->text(__('Das sieht nach einem Eingriff von aussen aus. Das Modul hat nichts verändert, es meldet nur.', 'rh-hardening'));
 
-        if ($pending === []) {
-            return;
-        }
-
-        $lines = [];
-        $ids = [];
-
-        foreach ($pending as $row) {
-            $ids[] = (int) $row->id;
-            $lines[] = sprintf(
-                '%s  [%s]  %s',
-                get_date_from_gmt((string) $row->created_at, 'd.m.Y H:i'),
-                Event::severityLabel((string) $row->severity),
-                (string) $row->message
-            );
-        }
-
-        $body = implode("\n", [
-            sprintf(
-                /* translators: %s: Domain der Website */
-                __('Wochenbericht Sicherheit für %s', 'rh-hardening'),
-                $this->siteHost()
-            ),
-            '',
-            sprintf(
-                /* translators: %d: Anzahl der Vorgänge */
-                _n('%d Vorgang in den letzten sieben Tagen:', '%d Vorgänge in den letzten sieben Tagen:', count($lines), 'rh-hardening'),
-                count($lines)
-            ),
-            '',
-            implode("\n", $lines),
-            '',
-            __('Vollständige Chronik:', 'rh-hardening'),
-            $this->chronicleUrl(),
-        ]);
-
-        if ($this->send(
-            sprintf(
-                /* translators: %s: Domain der Website */
-                __('[Sicherheit] Wochenbericht %s', 'rh-hardening'),
-                $this->siteHost()
-            ),
-            $body
-        )) {
-            EventLog::markNotified($ids);
-        }
-    }
-
-    private function criticalBody(Event $event): string
-    {
-        $lines = [
-            __('Auf dieser Website ist etwas aufgefallen, das nach einer Übernahme aussehen kann.', 'rh-hardening'),
-            '',
-            sprintf(__('Website: %s', 'rh-hardening'), home_url('/')),
-            sprintf(__('Zeitpunkt: %s', 'rh-hardening'), current_time('d.m.Y H:i')),
-            sprintf(__('Vorgang: %s', 'rh-hardening'), $event->message),
-            '',
+        $rows = [
+            __('Website', 'rh-hardening') => home_url('/'),
+            __('Zeitpunkt', 'rh-hardening') => current_time('d.m.Y H:i'),
         ];
 
         foreach ($event->context as $key => $value) {
             if ($value === null || $value === '') {
                 continue;
             }
-            $lines[] = sprintf('%s: %s', $key, (string) $value);
+
+            $rows[ucfirst((string) $key)] = (string) $value;
         }
 
-        $lines[] = '';
-        $lines[] = __('Das Modul hat nichts verändert. Bitte selbst nachsehen:', 'rh-hardening');
-        $lines[] = $this->chronicleUrl();
+        $message->rows($rows);
+        $message->button(__('In der Chronik nachsehen', 'rh-hardening'), $this->chronicleUrl());
 
-        return implode("\n", $lines);
+        return $message;
     }
 
-    private function send(string $subject, string $body): bool
+    private function send(string $subject, MailMessage $message): bool
     {
         $to = $this->recipient();
 
@@ -172,7 +190,7 @@ final class Mailer
             return false;
         }
 
-        $sent = (bool) wp_mail($to, $subject, $body);
+        $sent = Mail::send($to, $subject, $message, $this->footerNote());
 
         if (! $sent) {
             // Eine Meldung, die nicht ankommt, ist schlimmer als keine: man
@@ -181,6 +199,15 @@ final class Mailer
         }
 
         return $sent;
+    }
+
+    private function footerNote(): string
+    {
+        return sprintf(
+            /* translators: %s: Domain der Website */
+            __('Automatische Nachricht von %s, verschickt vom Sicherheits-Modul der Website.', 'rh-hardening'),
+            $this->siteHost()
+        );
     }
 
     private function recipient(): string

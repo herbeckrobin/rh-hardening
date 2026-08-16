@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace RhHardening\Admin;
 
+use RhBlueprint\Core\Admin\Guard;
+use RhBlueprint\Core\Admin\MailPanel;
+
 use RhBlueprint\Core\Settings\SettingsPage;
 use RhHardening\Checks\DocrootHygiene;
 use RhHardening\Integrity\HiddenScan;
@@ -73,6 +76,10 @@ final class SecurityPanel
 
             case Sections::TAB_LOG:
                 $this->renderChronicle(50);
+                break;
+
+            case MailPanel::TAB:
+                (new MailPanel())->render('hardening');
                 break;
 
             default:
@@ -514,11 +521,7 @@ final class SecurityPanel
 
     private function guard(string $action): void
     {
-        if (! current_user_can('manage_options')) {
-            wp_die(esc_html__('Dazu fehlen die Rechte.', 'rh-hardening'), '', ['response' => 403]);
-        }
-
-        check_admin_referer($action);
+        Guard::form($action);
     }
 
     /**

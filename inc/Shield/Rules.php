@@ -45,18 +45,21 @@ final class Rules
                 // alle zu wäre riskant, weil der Site-Editor diese Route zum
                 // gleichzeitigen Speichern mehrerer Vorlagen benutzt.
                 'note' => 'wp2shell (CVE-2026-63030) lief ohne Anmeldung über diese Route.',
+                'label' => 'Zugriff auf eine Schnittstelle, über die eine bekannte Lücke ausgenutzt wurde',
             ],
             [
                 'id' => 'user-listing',
                 'type' => 'namespace_guest',
                 'value' => '/wp/v2/users',
                 'note' => 'Gibt ohne Anmeldung die Anmeldenamen preis.',
+                'label' => 'Versuch, die Benutzernamen der Website auszulesen',
             ],
             [
                 'id' => 'site-health',
                 'type' => 'namespace_guest',
                 'value' => '/wp-site-health/v1',
                 'note' => 'Verrät Aufbau und Versionen der Installation.',
+                'label' => 'Versuch, Aufbau und Versionen der Installation auszulesen',
             ],
             [
                 'id' => 'author-notin-injection',
@@ -64,8 +67,46 @@ final class Rules
                 'param' => 'author__not_in',
                 'pattern' => '/(union[\s\/*]|select[\s\/*].*from|sleep\s*\(|benchmark\s*\(|information_schema)/i',
                 'note' => 'Der zweite Teil von wp2shell (CVE-2026-60137) schleuste hier SQL ein.',
+                'label' => 'Versuch, über einen Suchparameter Datenbankbefehle einzuschleusen',
             ],
         ];
+    }
+
+    /**
+     * Klartext zu einer Regel, für Chronik und Bericht.
+     *
+     * Die Regel-Kennung ist für die Technik gedacht ("user-listing"). In einer
+     * Meldung an den Betreuer steht sonst eine Vokabel, mit der niemand etwas
+     * anfangen kann. Selbst angelegte Regeln ohne Klartext fallen auf ihre
+     * Kennung zurück, das ist immer noch besser als nichts.
+     */
+    public static function label(string $id): string
+    {
+        foreach (self::all() as $rule) {
+            if (($rule['id'] ?? '') === $id && ($rule['label'] ?? '') !== '') {
+                return (string) $rule['label'];
+            }
+        }
+
+        foreach (self::defaults() as $rule) {
+            if ($rule['id'] === $id && isset($rule['label'])) {
+                return (string) $rule['label'];
+            }
+        }
+
+        if (str_starts_with($id, 'contain-')) {
+            return sprintf(
+                /* translators: %s: Name der gesperrten Komponente */
+                __('Zugriff auf die gesperrte Schnittstelle von "%s"', 'rh-hardening'),
+                substr($id, strlen('contain-'))
+            );
+        }
+
+        return sprintf(
+            /* translators: %s: Kennung der Regel */
+            __('Abgewiesen durch die Regel "%s"', 'rh-hardening'),
+            $id
+        );
     }
 
     /**

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RhHardening\Support;
 
+use RhBlueprint\Core\Support\Bytes;
+
 /**
  * Was diese Umgebung kann und was nicht.
  *
@@ -61,21 +63,7 @@ final class Env
      */
     public static function memoryLimit(): int
     {
-        $raw = trim((string) ini_get('memory_limit'));
-
-        if ($raw === '' || $raw === '-1') {
-            return 0;
-        }
-
-        $unit = strtolower(substr($raw, -1));
-        $value = (int) $raw;
-
-        return match ($unit) {
-            'g' => $value * 1024 * 1024 * 1024,
-            'm' => $value * 1024 * 1024,
-            'k' => $value * 1024,
-            default => $value,
-        };
+        return Bytes::memoryLimit();
     }
 
     /**
@@ -86,13 +74,7 @@ final class Env
      */
     public static function hasHeadroom(int $neededBytes): bool
     {
-        $limit = self::memoryLimit();
-
-        if ($limit === 0) {
-            return true;
-        }
-
-        return ($limit - memory_get_usage(true)) > $neededBytes;
+        return Bytes::hasHeadroom($neededBytes);
     }
 
     /**

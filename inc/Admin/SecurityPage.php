@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RhHardening\Admin;
 
+use RhBlueprint\Core\Admin\Ui;
+use RhBlueprint\Core\Admin\Guard;
 use RhBlueprint\Core\Settings\SettingField;
 use RhBlueprint\Core\Settings\SettingsHub;
 use RhHardening\Csp\Violations;
@@ -120,10 +122,11 @@ final class SecurityPage
         printf('<input type="hidden" name="feld" value="%s" />', esc_attr($fieldId));
         printf('<input type="hidden" name="sub" value="%s" />', esc_attr(Sections::current()));
         printf('<input type="hidden" name="auswahl" value="%s" />', $isSelect ? '1' : '0');
-        printf(
-            '<label class="rhbp-switch"><input type="checkbox" name="an" value="1" %s onchange="this.form.submit()" /><span class="rhbp-switch__track" aria-hidden="true"></span></label>',
-            checked($on, true, false)
-        );
+        echo Ui::switch([
+            'name' => 'an',
+            'checked' => $on,
+            'input' => ['onchange' => 'this.form.submit()'],
+        ]);
         echo '</form>';
 
         return (string) ob_get_clean();
@@ -285,18 +288,28 @@ final class SecurityPage
 
         $base = $this->field($fieldId);
 
+        // Einmal auflösen statt an drei Stellen dieselbe Frage stellen.
+        $titel = $base instanceof SettingField ? $base->label : '';
+
         // Das Core-JS findet das Modal über die id und schaltet die Klasse
         // is-open. Kein hidden-Attribut dazu: das gewinnt gegen die Klasse und
         // das Modal bliebe unsichtbar.
-        printf('<div class="rhbp-modal-backdrop" id="%s">', esc_attr('rhhard-' . $fieldId));
-        echo '<div class="rhbp-modal">';
+        printf('<div class="rhbp-modal-backdrop" id="%s" data-rhbp-modal-backdrop>', esc_attr('rhhard-' . $fieldId));
+
+        // Ohne Rolle und aria-modal ist das für einen Screenreader kein Dialog,
+        // sondern ein Stück Seite, das ohne Ankündigung auftaucht. Alle anderen
+        // Dialoge der Suite haben beides, dieser war der einzige ohne.
+        printf(
+            '<div class="rhbp-modal" role="dialog" aria-modal="true" aria-label="%s">',
+            esc_attr($titel !== '' ? $titel : __('Einstellungen', 'rh-hardening'))
+        );
         printf('<form method="post" action="%s">', esc_url(admin_url('admin-post.php')));
         wp_nonce_field(self::ACTION_SAVE);
         printf('<input type="hidden" name="action" value="%s" />', esc_attr(self::ACTION_SAVE));
         printf('<input type="hidden" name="sub" value="%s" />', esc_attr(Sections::current()));
 
         echo '<div class="rhbp-modal__head"><div class="rhbp-modal__head-l">';
-        printf('<h2 class="rhbp-modal__title">%s</h2>', esc_html($base?->label ?? ''));
+        printf('<h2 class="rhbp-modal__title">%s</h2>', esc_html($titel));
         echo '</div>';
         printf(
             '<button type="button" class="rhbp-btn rhbp-btn--icon" data-rhbp-modal-close aria-label="%s">&times;</button>',
@@ -317,7 +330,7 @@ final class SecurityPage
 
             // Trägt das Feld denselben Namen wie das Modal, wäre die
             // Beschriftung eine Doppelung.
-            if ($field->label !== ($base?->label ?? '')) {
+            if ($field->label !== $titel) {
                 printf('<label for="%s"><strong>%s</strong></label>', esc_attr($extraId), esc_html($field->label));
             }
 
@@ -493,11 +506,7 @@ final class SecurityPage
 
     private function guard(string $action): void
     {
-        if (! current_user_can('manage_options')) {
-            wp_die(esc_html__('Dazu fehlen die Rechte.', 'rh-hardening'), '', ['response' => 403]);
-        }
-
-        check_admin_referer($action);
+        Guard::form($action);
     }
 
     private function back(): never

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RhHardening;
 
 use RhBlueprint\Core\Core;
+use RhBlueprint\Core\UpdateChecker;
 use RhBlueprint\Core\Settings\SettingsPage;
 use RhHardening\Admin\HardeningGroup;
 use RhHardening\Admin\SecurityPage;
@@ -39,11 +40,9 @@ final class Plugin
 {
     public static function boot(): void
     {
-        // Im WordPress.org-Build wird der UpdateChecker entfernt (WP.org liefert
-        // Updates selbst), darum defensiv prüfen.
-        if (class_exists(UpdateChecker::class)) {
-            (new UpdateChecker())->boot();
-        }
+        add_action('plugins_loaded', static function (): void {
+            (new UpdateChecker('rh-hardening', RHHARD_PLUGIN_FILE))->boot();
+        }, 0);
 
         register_activation_hook(RHHARD_PLUGIN_FILE, [Installer::class, 'activate']);
         register_deactivation_hook(RHHARD_PLUGIN_FILE, [Installer::class, 'deactivate']);

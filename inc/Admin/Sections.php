@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace RhHardening\Admin;
 
+use RhBlueprint\Core\Admin\MailPanel;
+
 /**
  * Die Gliederung des Sicherheits-Tabs.
  *
@@ -27,12 +29,22 @@ final class Sections
      */
     public static function tabs(): array
     {
-        return [
+        $tabs = [
             self::TAB_OVERVIEW => __('Überblick', 'rh-hardening'),
             self::TAB_PROTECT => __('Schutz', 'rh-hardening'),
             self::TAB_WATCH => __('Überwachung', 'rh-hardening'),
             self::TAB_LOG => __('Chronik', 'rh-hardening'),
         ];
+
+        // Die Mail-Einstellungen des Moduls kommen aus dem Core, gehören aber
+        // in diese Leiste und nicht in eine zweite darüber.
+        $mail = MailPanel::tabLabel('hardening');
+
+        if ($mail !== null) {
+            $tabs[MailPanel::TAB] = $mail;
+        }
+
+        return $tabs;
     }
 
     public static function current(): string

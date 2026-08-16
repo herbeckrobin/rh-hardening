@@ -17,9 +17,10 @@ $base = dirname(__DIR__);
 require $base . '/vendor/autoload.php';
 
 // Der Core kommt zur Laufzeit über seinen eigenen Version-Negotiation-Loader,
-// nicht über diesen Autoloader. Für den Klassen-Check reicht das Interface.
-require $base . '/vendor/rh/blueprint-core/src/Settings/GroupInterface.php';
-require $base . '/vendor/rh/blueprint-core/src/Settings/SettingField.php';
+// den es hier nicht gibt. Statt einzelne Klassen von Hand zu holen (und beim
+// nächsten Core-Aufruf wieder zu stolpern) laedt dieser Autoloader alles aus
+// dem gebundelten Core, ohne ihn zu starten.
+require $base . '/vendor/rh/blueprint-core/autoload-src.php';
 
 if (! function_exists('__')) {
     function __(string $text, ?string $domain = null): string

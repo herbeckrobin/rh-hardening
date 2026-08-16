@@ -44,6 +44,21 @@ final class ScanRunner
             return false;
         }
 
+        // Ein Lauf, der auf "läuft" stehen geblieben ist, wurde unterwegs
+        // abgeschossen (Zeitlimit, Speicher, Neustart). Das hinterlässt sonst
+        // keine Spur: bei einem Prozessende greift kein catch. Hier ist die
+        // einzige Stelle, an der es überhaupt jemandem auffällt.
+        if ($job->isStale()) {
+            EventLog::record(Event::warn(
+                Event::TYPE_SCAN_COMPLETED,
+                __('Ein Prüflauf ist unterwegs abgebrochen und wird neu gestartet.', 'rh-hardening'),
+                [
+                    'abschnitt' => $job->stage,
+                    'stand' => gmdate('d.m.Y H:i', $job->updatedAt),
+                ]
+            ));
+        }
+
         ScanJob::start($trigger);
         $this->scheduleNextTick();
 
@@ -61,6 +76,14 @@ final class ScanRunner
     public function tick(): void
     {
         if (get_transient(self::LOCK_TRANSIENT)) {
+            // Nicht einfach aussteigen: dieser Tick ist der einzige, der
+            // geplant war. Wer hier kommentarlos zurückkehrt, reisst die
+            // Kette ab, und der Prüflauf bleibt bis zum nächsten Wochenlauf
+            // stehen. Genau das passiert nach einem abgestürzten Tick, denn
+            // dessen Sperre bleibt stehen (bei einem Prozessende läuft kein
+            // finally) und faengt den bereits geplanten Nachfolger ab.
+            $this->scheduleNextTick(true);
+
             return;
         }
 
@@ -166,6 +189,8 @@ final class ScanRunner
      */
     private function report(ScanJob $job): void
     {
+        $reported = 0;
+
         foreach (self::findingTypes() as $key => $meta) {
             $count = $job->findingCount($key);
 
@@ -180,6 +205,8 @@ final class ScanRunner
                 continue;
             }
 
+            $reported += $count;
+
             $files = $job->findings[$key] ?? [];
 
             EventLog::record(new Event(
@@ -193,7 +220,13 @@ final class ScanRunner
             ));
         }
 
-        if ($job->totalFindings() === 0) {
+        // Gezählt wird, was auch protokolliert wurde. Vorher stand hier
+        // totalFindings(), das die nicht protokollierten Funde mitzählte:
+        // sobald ein einziges Plugin nicht gegen wordpress.org prüfbar war
+        // (auf jeder Seite mit eigenen Modulen also immer), blieb dieser
+        // Eintrag aus. Der Prüflauf lief dann sauber durch und hinterliess
+        // keine Spur, weder in der Chronik noch im Wochenbericht.
+        if ($reported === 0) {
             EventLog::record(Event::info(
                 Event::TYPE_SCAN_COMPLETED,
                 sprintf(
@@ -285,10 +318,14 @@ final class ScanRunner
         ];
     }
 
-    private function scheduleNextTick(): void
+    /**
+     * @param bool $afterLock Nach einer Sperren-Kollision erst wieder anklopfen,
+     *                        wenn die Sperre abgelaufen sein kann.
+     */
+    private function scheduleNextTick(bool $afterLock = false): void
     {
         if (! wp_next_scheduled(self::CRON_TICK)) {
-            wp_schedule_single_event(time() + 30, self::CRON_TICK);
+            wp_schedule_single_event(time() + ($afterLock ? 70 : 30), self::CRON_TICK);
         }
     }
 
