@@ -28,6 +28,9 @@ final class Rules
     public const OPTION = 'rhhard_shield_rules';
     public const QUEUE_OPTION = 'rhhard_shield_queue';
 
+    /** Erkennt eingeschleuste SQL-Bausteine in einer Liste von Kennungen. */
+    private const SQL_INJECTION_PATTERN = '/(union[\s\/*]|select[\s\/*].*from|sleep\s*\(|benchmark\s*\(|information_schema)/i';
+
     /**
      * Grundregeln, die auf jeder Seite Sinn ergeben.
      *
@@ -65,8 +68,19 @@ final class Rules
                 'id' => 'author-notin-injection',
                 'type' => 'param',
                 'param' => 'author__not_in',
-                'pattern' => '/(union[\s\/*]|select[\s\/*].*from|sleep\s*\(|benchmark\s*\(|information_schema)/i',
+                'pattern' => self::SQL_INJECTION_PATTERN,
                 'note' => 'Der zweite Teil von wp2shell (CVE-2026-60137) schleuste hier SQL ein.',
+                'label' => 'Versuch, über einen Suchparameter Datenbankbefehle einzuschleusen',
+            ],
+            [
+                // Derselbe Weg unter dem Namen, den die REST-Schnittstelle
+                // benutzt. Sie reicht author_exclude als author__not_in an die
+                // Datenbankabfrage weiter.
+                'id' => 'author-exclude-injection',
+                'type' => 'param',
+                'param' => 'author_exclude',
+                'pattern' => self::SQL_INJECTION_PATTERN,
+                'note' => 'REST-Name von author__not_in, gleicher Einschleusweg wie bei wp2shell (CVE-2026-60137).',
                 'label' => 'Versuch, über einen Suchparameter Datenbankbefehle einzuschleusen',
             ],
         ];

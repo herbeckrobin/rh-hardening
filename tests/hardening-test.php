@@ -151,7 +151,8 @@ check('veränderter Kern geht in die Chronik', $types['core_modified']['log'], t
 echo "\nSchutzwall\n";
 $rules = RhHardening\Shield\Rules::defaults();
 $byId = array_column($rules, null, 'id');
-check('Grundregeln vorhanden', count($rules), 4);
+check('Grundregeln vorhanden', count($rules), 5);
+check('author_exclude hat dasselbe Muster wie author__not_in', $byId['author-exclude-injection']['pattern'], $byId['author-notin-injection']['pattern']);
 check(
     'die Batch-Route ist nur für Gäste gesperrt',
     $byId['batch-endpoint']['type'],
@@ -164,6 +165,71 @@ check('SQL-Muster trifft eine harmlose Liste nicht', preg_match($byId['author-no
 $template = file_get_contents(dirname(__DIR__) . '/inc/Shield/template.php');
 check('Vorlage bricht bei einem Fehler nicht die Seite', str_contains($template, 'catch (\\Throwable'), true);
 check('Vorlage trägt einen Platzhalter für die Version', str_contains($template, '__RHHARD_SHIELD_VERSION__'), true);
+
+echo "\nRouten-Vergleich (A-0804, Batch mit großem B)\n";
+use RhHardening\Shield\RouteMatch;
+
+foreach (['/batch/v1', '/Batch/v1', '/BATCH/v1', '/batch%2Fv1', '/Batch%2fv1', '/batch%252Fv1', '//batch/v1', '/batch//v1', 'batch/v1'] as $variant) {
+    check('gesperrt: ' . $variant, RouteMatch::startsWith($variant, '/batch/v1'), true);
+}
+check('Regelwert wird ebenso normalisiert', RouteMatch::startsWith('/batch/v1', 'Batch/V1/'), true);
+check('fremde Route bleibt offen', RouteMatch::startsWith('/wp/v2/posts', '/batch/v1'), false);
+check('leerer Regelwert sperrt nichts', RouteMatch::startsWith('/wp/v2/posts', '/'), false);
+check('Benutzerliste mit großem U', RouteMatch::startsWith('/wp/v2/Users', '/wp/v2/users'), true);
+
+$allow = ['oembed/1.0', 'contact-form-7/v1'];
+check('Freigabe greift', RouteMatch::coveredBy('/oembed/1.0/embed', $allow), true);
+check('Freigabe greift auch groß geschrieben', RouteMatch::coveredBy('/OEmbed/1.0/embed', $allow), true);
+check('nicht freigegeben bleibt zu', RouteMatch::coveredBy('/wp/v2/posts', $allow), false);
+check(
+    'Kodierung erschleicht keine Freigabe',
+    RouteMatch::coveredBy('/%6fembed/1.0/embed', $allow),
+    false
+);
+
+echo "\nSchutzwall-Vorlage rechnet wie RouteMatch\n";
+if (! defined('ABSPATH')) {
+    define('ABSPATH', '/tmp/');
+}
+if (! function_exists('get_option')) {
+    function get_option(string $name, mixed $default = false): mixed
+    {
+        return $default;
+    }
+}
+require dirname(__DIR__) . '/inc/Shield/template.php';
+
+$samples = ['/Batch/v1', 'batch%2Fv1', '/Batch%252Fv1', '//wp//v2/USERS', '/%6fembed/1.0', '/wp-site-health/v1/', ''];
+$same = true;
+foreach ($samples as $sample) {
+    foreach ([false, true] as $decode) {
+        $same = $same && RouteMatch::normalize($sample, $decode) === rhhard_shield_normalize($sample, $decode);
+    }
+    $same = $same && RouteMatch::startsWith($sample, '/batch/v1') === rhhard_shield_starts_with($sample, '/batch/v1');
+}
+check('Normalisierung identisch', $same, true);
+
+$_GET = [];
+$_POST = ['rest_route' => '/Batch/v1'];
+check('rest_route im Formular-Rumpf wird gesehen', rhhard_shield_any_starts_with(rhhard_shield_rest_routes('/'), '/batch/v1'), true);
+$_POST = [];
+$_GET = ['rest_route' => '/batch%2Fv1'];
+check('rest_route in der URL wird gesehen', rhhard_shield_any_starts_with(rhhard_shield_rest_routes('/'), '/batch/v1'), true);
+$_GET = [];
+check('Pfad unter /wp-json/ wird gesehen', rhhard_shield_any_starts_with(rhhard_shield_rest_routes('/wp-json/BATCH/v1'), '/batch/v1'), true);
+check('Startseite ist keine REST-Route', rhhard_shield_rest_routes('/'), []);
+
+echo "\nParameter im JSON-Rumpf\n";
+$rule = $byId['author-exclude-injection'];
+$sqli = '1) UNION SELECT user_pass FROM wp_users-- ';
+check('oberste Ebene', rhhard_shield_param_hit($rule, [[], [], ['author_exclude' => $sqli]]), true);
+check('als Liste', rhhard_shield_param_hit($rule, [[], [], ['author_exclude' => [3, $sqli]]]), true);
+check('in einer Batch-Unteranfrage', rhhard_shield_param_hit($rule, [[], [], ['requests' => [['method' => 'GET', 'path' => '/wp/v2/posts', 'body' => ['author_exclude' => [$sqli]]]]]]), true);
+check('in der Anfragezeile einer Unteranfrage', rhhard_shield_param_hit($rule, [[], [], ['requests' => [['path' => '/wp/v2/posts?author_exclude=' . rawurlencode($sqli)]]]]), true);
+check('harmlose Liste bleibt offen', rhhard_shield_param_hit($rule, [['author_exclude' => ['3', '7']], [], ['author_exclude' => [3, 7]]]), false);
+check('Grenze für Werte bleibt erhalten', rhhard_shield_param_hit($rule, [[], [], ['author_exclude' => str_repeat('1', RHHARD_SHIELD_MAX_VALUE + 1)]]), true);
+check('Wert an der Grenze geht noch durch den Vergleich', rhhard_shield_param_hit($rule, [[], [], ['author_exclude' => str_repeat('1', RHHARD_SHIELD_MAX_VALUE)]]), false);
+check('URL-Parameter weiterhin geprüft', rhhard_shield_param_hit($byId['author-notin-injection'], [['author__not_in' => $sqli], []]), true);
 
 echo "\nVersionsvergleich\n";
 use RhHardening\Radar\VersionRange;

@@ -29,6 +29,12 @@ define('RHHARD_SHIELD', '__RHHARD_SHIELD_VERSION__');
 /** Werte über dieser Grösse gehen nicht durch den Mustervergleich. */
 define('RHHARD_SHIELD_MAX_VALUE', 8192);
 
+/**
+ * Grössere JSON-Rümpfe werden nicht zerlegt. Das Dekodieren kostet Speicher,
+ * und ein Speicherfehler lässt sich nicht abfangen, er würde die Seite mitreißen.
+ */
+define('RHHARD_SHIELD_MAX_BODY', 1048576);
+
 /** So oft darf die Warteschlange höchstens geschrieben werden. */
 define('RHHARD_SHIELD_WRITE_EVERY', 60);
 
@@ -47,7 +53,9 @@ define('RHHARD_SHIELD_WRITE_EVERY', 60);
         }
 
         $path = (string) parse_url($uri, PHP_URL_PATH);
-        $restRoute = rhhard_shield_rest_route($path);
+        $restRoutes = rhhard_shield_rest_routes($path);
+        $restRoute = $restRoutes[0] ?? null;
+        $sources = null;
 
         // Angemeldete Besucher laufen durch. Hier gibt es noch keine Sitzung,
         // deshalb reicht die Frage, ob überhaupt ein Anmelde-Cookie mitkommt.
@@ -60,18 +68,14 @@ define('RHHARD_SHIELD_WRITE_EVERY', 60);
                 continue;
             }
 
+            $value = (string) ($rule['value'] ?? '');
+
             $hit = match ($rule['type']) {
-                'route' => $restRoute !== null && rhhard_shield_starts_with($restRoute, (string) ($rule['value'] ?? '')),
-                'namespace_guest' => ! $looksLoggedIn
-                    && $restRoute !== null
-                    && rhhard_shield_starts_with($restRoute, (string) ($rule['value'] ?? '')),
-                'param' => rhhard_shield_param_hit(
-                    (string) ($rule['param'] ?? ''),
-                    (string) ($rule['pattern'] ?? ''),
-                    (string) ($rule['id'] ?? 'unbenannt')
-                ),
-                'component' => $restRoute !== null
-                    && rhhard_shield_starts_with($restRoute, (string) ($rule['value'] ?? '')),
+                'route', 'component' => rhhard_shield_any_starts_with($restRoutes, $value),
+                'namespace_guest' => ! $looksLoggedIn && rhhard_shield_any_starts_with($restRoutes, $value),
+                // Die Quellen werden erst beim ersten Parameter-Treffer
+                // eingelesen, weil dafür der Rumpf zerlegt werden muss.
+                'param' => rhhard_shield_param_hit($rule, $sources ??= rhhard_shield_param_sources($restRoute !== null)),
                 default => false,
             };
 
@@ -87,36 +91,93 @@ define('RHHARD_SHIELD_WRITE_EVERY', 60);
 })();
 
 /**
- * Ermittelt die REST-Route, egal ob sie über /wp-json/ oder ?rest_route= kommt.
+ * Sammelt alle Wege, auf denen eine REST-Route ankommen kann: rest_route im
+ * Rumpf, rest_route in der URL und der Pfad unter /wp-json/. WordPress nimmt
+ * davon genau einen, welchen, hängt von der Reihenfolge in class-wp.php ab.
+ * Der Wall prüft alle, dann muss er diese Reihenfolge nicht nachbauen.
+ *
+ * @return array<int, string>
  */
-function rhhard_shield_rest_route(string $path): ?string
+function rhhard_shield_rest_routes(string $path): array
 {
-    if (isset($_GET['rest_route'])) {
-        $route = (string) $_GET['rest_route'];
+    $routes = [];
 
-        return '/' . ltrim($route, '/');
+    foreach ([$_POST, $_GET] as $source) {
+        if (isset($source['rest_route']) && is_string($source['rest_route'])) {
+            $routes[] = '/' . ltrim($source['rest_route'], '/');
+        }
     }
 
     $prefix = '/wp-json/';
-    $position = strpos($path, $prefix);
+    $position = stripos($path, $prefix);
 
-    if ($position === false) {
-        return null;
+    if ($position !== false) {
+        $routes[] = '/' . ltrim(substr($path, $position + strlen($prefix)), '/');
     }
 
-    return '/' . ltrim(substr($path, $position + strlen($prefix)), '/');
+    return $routes;
 }
 
+/**
+ * Bringt eine Route in die Form, in der verglichen wird. WordPress löst Routen
+ * ohne Rücksicht auf Groß- und Kleinschreibung auf, ein direkter Vergleich ließ
+ * deshalb /Batch/v1 durch. Dieselbe Rechnung steckt in
+ * RhHardening\Shield\RouteMatch, der Test hält beide gleich.
+ */
+function rhhard_shield_normalize(string $route, bool $decode): string
+{
+    if ($decode) {
+        for ($round = 0; $round < 3; $round++) {
+            $decoded = rawurldecode($route);
+
+            if ($decoded === $route) {
+                break;
+            }
+
+            $route = $decoded;
+        }
+    }
+
+    $route = strtolower($route);
+
+    return (string) preg_replace('#/+#', '/', '/' . $route);
+}
+
+/**
+ * Trifft, sobald eine Fassung der Route (roh oder dekodiert) mit dem Präfix
+ * beginnt. Für Sperren ist das die sichere Richtung.
+ */
 function rhhard_shield_starts_with(string $haystack, string $needle): bool
 {
+    $needle = trim($needle, '/');
+
     if ($needle === '') {
         return false;
     }
 
-    $needle = '/' . trim($needle, '/');
-    $haystack = '/' . ltrim($haystack, '/');
+    $needle = rhhard_shield_normalize($needle, true);
 
-    return str_starts_with($haystack, $needle);
+    foreach ([false, true] as $decode) {
+        if (str_starts_with(rhhard_shield_normalize($haystack, $decode), $needle)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param array<int, string> $routes
+ */
+function rhhard_shield_any_starts_with(array $routes, string $needle): bool
+{
+    foreach ($routes as $route) {
+        if (rhhard_shield_starts_with($route, $needle)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -133,45 +194,155 @@ function rhhard_shield_starts_with(string $haystack, string $needle): bool
  *      "kein Treffer" durchgehen, sonst schützt eine kaputte Regel stillschweigend
  *      nicht mehr. Es wird vermerkt und die Regel greift nicht.
  */
-function rhhard_shield_param_hit(string $param, string $pattern, string $ruleId): bool
+function rhhard_shield_param_hit(array $rule, array $sources): bool
 {
+    $param = (string) ($rule['param'] ?? '');
+    $pattern = (string) ($rule['pattern'] ?? '');
+    $ruleId = (string) ($rule['id'] ?? 'unbenannt');
+
     if ($param === '' || $pattern === '') {
         return false;
     }
 
-    foreach ([$_GET, $_POST] as $source) {
-        if (! is_array($source) || ! array_key_exists($param, $source)) {
-            continue;
+    $values = [];
+
+    foreach ($sources as $source) {
+        rhhard_shield_collect($source, $param, $values);
+    }
+
+    foreach ($values as $value) {
+        if (strlen($value) > RHHARD_SHIELD_MAX_VALUE) {
+            return true;
         }
 
-        $values = is_array($source[$param]) ? $source[$param] : [$source[$param]];
+        $hit = @preg_match($pattern, $value);
 
-        foreach ($values as $value) {
-            if (! is_scalar($value)) {
-                continue;
-            }
+        if ($hit === false) {
+            rhhard_shield_broken_rule($ruleId);
 
-            $value = (string) $value;
+            return false;
+        }
 
-            if (strlen($value) > RHHARD_SHIELD_MAX_VALUE) {
-                return true;
-            }
-
-            $hit = @preg_match($pattern, $value);
-
-            if ($hit === false) {
-                rhhard_shield_broken_rule($ruleId);
-
-                return false;
-            }
-
-            if ($hit === 1) {
-                return true;
-            }
+        if ($hit === 1) {
+            return true;
         }
     }
 
     return false;
+}
+
+/**
+ * Woher Parameter kommen können: URL, Formular-Rumpf und bei REST-Aufrufen ein
+ * JSON-Rumpf. Den liest WordPress für REST genauso ein wie ein Formular.
+ *
+ * @return array<int, array<mixed>>
+ */
+function rhhard_shield_param_sources(bool $isRest): array
+{
+    $sources = [$_GET, $_POST];
+
+    if ($isRest) {
+        $json = rhhard_shield_json_body();
+
+        if ($json !== null) {
+            $sources[] = $json;
+        }
+    }
+
+    return $sources;
+}
+
+/**
+ * @return array<mixed>|null
+ */
+function rhhard_shield_json_body(): ?array
+{
+    $type = (string) ($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '');
+
+    if (stripos($type, 'json') === false) {
+        return null;
+    }
+
+    // php://input lässt sich mehrfach lesen, WordPress bekommt den Rumpf
+    // später unverändert.
+    $raw = file_get_contents('php://input', false, null, 0, RHHARD_SHIELD_MAX_BODY + 1);
+
+    if (! is_string($raw) || $raw === '' || strlen($raw) > RHHARD_SHIELD_MAX_BODY) {
+        return null;
+    }
+
+    $data = json_decode($raw, true);
+
+    return is_array($data) ? $data : null;
+}
+
+/**
+ * Liest den Parameter genau dort, wo WordPress ihn auch liest: auf der obersten
+ * Ebene der Quelle und, beim Batch-Aufruf, in jeder Unteranfrage unter
+ * requests[n].body oder als Anfragezeile in requests[n].path. Dort lief die
+ * Einschleusung bei wp2shell.
+ *
+ * Bewusst keine Suche in beliebiger Tiefe: WordPress wertet dort nichts aus,
+ * und eine Suche mit Obergrenze ließe sich mit vorgeschaltetem Füllmaterial
+ * ins Leere laufen lassen.
+ *
+ * @param mixed              $source
+ * @param array<int, string> $values
+ */
+function rhhard_shield_collect($source, string $param, array &$values): void
+{
+    if (! is_array($source)) {
+        return;
+    }
+
+    if (array_key_exists($param, $source)) {
+        rhhard_shield_scalars($source[$param], $values);
+    }
+
+    if (! isset($source['requests']) || ! is_array($source['requests'])) {
+        return;
+    }
+
+    foreach ($source['requests'] as $request) {
+        if (! is_array($request)) {
+            continue;
+        }
+
+        if (isset($request['body']) && is_array($request['body']) && array_key_exists($param, $request['body'])) {
+            rhhard_shield_scalars($request['body'][$param], $values);
+        }
+
+        if (isset($request['path']) && is_string($request['path']) && str_contains($request['path'], '?')) {
+            parse_str((string) parse_url($request['path'], PHP_URL_QUERY), $query);
+
+            if (array_key_exists($param, $query)) {
+                rhhard_shield_scalars($query[$param], $values);
+            }
+        }
+    }
+}
+
+/**
+ * @param mixed              $value
+ * @param array<int, string> $values
+ */
+function rhhard_shield_scalars($value, array &$values): void
+{
+    if (is_scalar($value)) {
+        $values[] = (string) $value;
+
+        return;
+    }
+
+    if (! is_array($value)) {
+        return;
+    }
+
+    array_walk_recursive($value, static function ($item) use (&$values): void {
+        if (is_scalar($item)) {
+            $values[] = (string) $item;
+        }
+    });
 }
 
 /**

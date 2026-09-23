@@ -8,6 +8,7 @@ use RhHardening\Admin\HardeningGroup;
 use RhHardening\Log\Event;
 use RhHardening\Log\EventLog;
 use RhHardening\Prevention\Csp;
+use RhHardening\Shield\RouteMatch;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Server;
@@ -105,12 +106,15 @@ final class RestGate
         );
     }
 
+    /**
+     * Vergleicht über RouteMatch, weil WordPress Routen ohne Rücksicht auf
+     * Groß- und Kleinschreibung auflöst. Ein direkter Präfix-Vergleich ließ
+     * /Batch/v1 durch.
+     */
     private function isBlocked(string $route): bool
     {
-        $route = '/' . ltrim($route, '/');
-
         foreach (self::BLOCKED_FOR_GUESTS as $blocked) {
-            if (str_starts_with($route, $blocked)) {
+            if (RouteMatch::startsWith($route, $blocked)) {
                 return true;
             }
         }
@@ -119,13 +123,7 @@ final class RestGate
             return false;
         }
 
-        foreach ($this->allowedNamespaces() as $namespace) {
-            if (str_starts_with($route, '/' . trim($namespace, '/'))) {
-                return false;
-            }
-        }
-
-        return true;
+        return ! RouteMatch::coveredBy($route, $this->allowedNamespaces());
     }
 
     /**
@@ -149,7 +147,9 @@ final class RestGate
 
     private function logBlocked(string $route): void
     {
-        $key = self::LOG_THROTTLE_PREFIX . md5($route);
+        // Normalisiert drosseln, sonst erzeugt jede Schreibweise (Batch,
+        // bAtch, BATCH ...) einen eigenen Eintrag und flutet die Chronik.
+        $key = self::LOG_THROTTLE_PREFIX . md5(RouteMatch::normalize($route, true));
 
         if (get_transient($key)) {
             return;
