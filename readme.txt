@@ -4,7 +4,7 @@ Tags: security, hardening, firewall, integrity, vulnerabilities
 Requires at least: 6.5
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.8.3
+Stable tag: 0.8.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,6 +35,10 @@ The hook order is chosen deliberately: ?author= is blocked in parse_request (bef
 Part of the rh-blueprint collection. Settings live under RH Blueprint > Sicherheit.
 
 == Changelog ==
+
+= 0.8.4 =
+* Update checks: use a GitHub token from RH_GITHUB_TOKEN (environment variable or wp-config constant) when one is set, which lifts the API limit from 60 to 5,000 requests per hour. Without a token nothing changes.
+* Update checks: after a GitHub rate-limit response all rh modules on the site pause their checks until GitHub resets the limit, and the last known update is kept. Bundles core 2.7.1.
 
 = 0.8.3 =
 * Security: the shield and the REST gate now compare routes the way WordPress resolves them, case-insensitive, URL-decoded and with repeated slashes collapsed. /wp-json/Batch/v1 was reaching the batch endpoint while /wp-json/batch/v1 was blocked. The strict allowlist follows the same rules, a route is only allowed if every form of it is.
