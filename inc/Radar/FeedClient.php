@@ -208,11 +208,12 @@ final class FeedClient
     }
 
     /**
-     * Das Radar läuft, solange es nicht ausgeschaltet ist.
+     * Das Radar läuft, solange es nicht ausgeschaltet ist. Mit Branding gilt
+     * ein eigener Schalter, der aus startet (siehe HardeningGroup::radarField).
      */
     public function isEnabled(): bool
     {
-        return (bool) rhbp_setting(HardeningGroup::GROUP_ID, HardeningGroup::FIELD_RADAR, true);
+        return (bool) rhbp_setting(HardeningGroup::GROUP_ID, HardeningGroup::radarField(), HardeningGroup::radarDefault());
     }
 
     public function forget(): void

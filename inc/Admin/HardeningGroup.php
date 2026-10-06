@@ -43,6 +43,13 @@ final class HardeningGroup implements GroupInterface
     // Radar
     public const FIELD_RADAR = 'radar';
 
+    /**
+     * Mit White-Label-Branding fragt das Radar robinherbeck.com an, das verrät
+     * die Herkunft. Darum dort ein eigener Schalter, der aus startet. Ohne
+     * Branding bleibt es beim bisherigen Feld (an).
+     */
+    public const FIELD_RADAR_BRANDED = 'radar_branded';
+
     // Chronik und Meldung
     public const FIELD_WATCH_CHANGES = 'watch_changes';
     public const FIELD_DEMOTE_ROGUE_ADMIN = 'demote_rogue_admin';
@@ -67,6 +74,21 @@ final class HardeningGroup implements GroupInterface
     public function description(): string
     {
         return __('Standard-Sicherheitsvorkehrungen für jede produktive Site. Die meisten sind per Default an und sollten nur abgeschaltet werden, wenn ein Baustein bewusst nicht gewünscht ist. Dieses Modul verändert die Website nie von sich aus: es sperrt, was hier eingestellt ist, und meldet alles andere.', 'rh-hardening');
+    }
+
+    public static function radarField(): string
+    {
+        return self::branded() ? self::FIELD_RADAR_BRANDED : self::FIELD_RADAR;
+    }
+
+    public static function radarDefault(): bool
+    {
+        return ! self::branded();
+    }
+
+    private static function branded(): bool
+    {
+        return function_exists('rhbp_branding_active') && rhbp_branding_active();
     }
 
     public function fields(): array
@@ -203,11 +225,11 @@ final class HardeningGroup implements GroupInterface
                 keywords: ['xmlrpc', 'pingback', 'brute force'],
             ),
             new SettingField(
-                id: self::FIELD_RADAR,
+                id: self::radarField(),
                 type: SettingField::TYPE_BOOLEAN,
                 label: __('Auf bekannte Lücken prüfen', 'rh-hardening'),
                 description: __('Holt täglich ein Verzeichnis bekannter Schwachstellen und gleicht es gegen die installierten Plugins, Themes und den WordPress-Kern ab. Der Abgleich passiert auf dieser Website; solange nichts zutrifft, verlässt keine Information über sie den Server. Gefunden wird nur gemeldet, eingespielt wird nichts.', 'rh-hardening'),
-                default: true,
+                default: self::radarDefault(),
                 keywords: ['feed', 'radar', 'schwachstelle', 'cve', 'wordfence', 'lücke'],
             ),
             new SettingField(

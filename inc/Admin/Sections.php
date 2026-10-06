@@ -98,7 +98,7 @@ final class Sections
                     'hinweis' => __('Erkennt, wenn jemand schon drin ist. Verändert wird nichts, außer wo es ausdrücklich dabeisteht.', 'rh-hardening'),
                     'felder' => [
                         HardeningGroup::FIELD_WATCH_CHANGES,
-                        HardeningGroup::FIELD_RADAR,
+                        HardeningGroup::radarField(),
                         HardeningGroup::FIELD_DEMOTE_ROGUE_ADMIN,
                     ],
                 ],
@@ -141,7 +141,7 @@ final class Sections
             HardeningGroup::FIELD_DISALLOW_FILE_EDIT => __('Nimmt den Datei-Editor aus dem Backend.', 'rh-hardening'),
             HardeningGroup::FIELD_DISALLOW_FILE_MODS => __('Sperrt jede Installation und jedes Update, auch automatische.', 'rh-hardening'),
             HardeningGroup::FIELD_WATCH_CHANGES => __('Hält fest, wer Plugins, Themes und Konten verändert.', 'rh-hardening'),
-            HardeningGroup::FIELD_RADAR => __('Prüft täglich, ob für die installierte Software Lücken bekannt sind.', 'rh-hardening'),
+            HardeningGroup::radarField() => __('Prüft täglich, ob für die installierte Software Lücken bekannt sind.', 'rh-hardening'),
             HardeningGroup::FIELD_DEMOTE_ROGUE_ADMIN => __('Setzt einen neu aufgetauchten Administrator sofort zurück.', 'rh-hardening'),
             HardeningGroup::FIELD_NOTIFY => __('Schickt Auffälligkeiten per Mail heraus.', 'rh-hardening'),
         ];
